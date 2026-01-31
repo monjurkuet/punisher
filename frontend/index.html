@@ -1,125 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PUNISHER // DASHBOARD</title>
-    <link href="styles.css" rel="stylesheet">
+    <title>PUNISHER // SUPREME HQ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="static/styles.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body class="bg-black text-white font-mono p-4" x-data="dashboard()">
-    <!-- Header -->
-    <header class="border-b-2 border-white pb-4 mb-8 flex justify-between items-end">
-        <div>
-            <h1 class="text-4xl font-bold tracking-tighter">PUNISHER</h1>
-            <div class="text-xs uppercase tracking-widest mt-1">Privacy-First Bitcoin Intelligence</div>
-        </div>
-        <div class="text-right">
-            <div class="text-xl" x-text="time"></div>
-            <div class="text-xs text-gray-500 uppercase">System Status: <span class="text-green-500">ONLINE</span></div>
-        </div>
-    </header>
 
-    <!-- Grid Layout -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-        
-        <!-- Left Column: Intelligence Feed -->
-        <div class="col-span-12 md:col-span-8 space-y-6">
-            <!-- Bitcoin Ticker -->
-            <div class="border-2 border-white p-4">
-                <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
-                    <h2 class="uppercase font-bold">Bitcoin Market Data</h2>
-                    <span class="animate-pulse text-green-500">LIVE</span>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <div class="text-xs text-gray-500">PRICE (USD)</div>
-                        <div class="text-2xl font-bold" x-text="btc.price">Loading...</div>
-                    </div>
-                    <div>
-                        <div class="text-xs text-gray-500">24H CHANGE</div>
-                        <div class="text-2xl font-bold" :class="btc.change >= 0 ? 'text-green-500' : 'text-red-500'" x-text="btc.change + '%'">0.00%</div>
-                    </div>
-                </div>
+<body class="bg-black text-white" x-data="agentUI()">
+    <!-- Navigation -->
+    <nav class="h-16 flex items-center justify-between px-8 border-b border-white/5 glass-panel mx-4 mt-4 mb-2">
+        <div class="flex items-center space-x-4">
+            <div class="w-8 h-8 bg-white flex items-center justify-center rounded">
+                <span class="text-black font-extrabold text-xl">P</span>
             </div>
+            <h1 class="text-lg font-bold tracking-widest uppercase">The Punisher</h1>
+        </div>
 
-            <!-- Whale Alerts -->
-            <div class="border-2 border-white p-4 h-96 overflow-y-auto custom-scrollbar">
-                <h2 class="uppercase font-bold mb-4 border-b border-gray-800 pb-2">Whale Activity Feed</h2>
-                <div class="space-y-2">
-                    <template x-for="alert in alerts" :key="alert.id">
-                        <div class="flex justify-between items-start text-sm border-b border-gray-900 pb-2 font-mono">
-                            <div>
-                                <span class="text-gray-500" x-text="alert.time"></span>
-                                <span class="mx-2 text-white font-bold" x-text="alert.type"></span>
-                                <span x-text="alert.message"></span>
+        <div class="flex space-x-1 bg-white/5 p-1 rounded-lg">
+            <button @click="view = 'console'" :class="view === 'console' ? 'bg-white/10 text-white' : 'text-white/40'"
+                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">Console</button>
+            <button @click="openHQ()" :class="view === 'hq' ? 'bg-white/10 text-white' : 'text-white/40'"
+                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">HQ /
+                Config</button>
+        </div>
+
+        <div class="flex items-center space-x-8 text-xs font-semibold tracking-widest uppercase text-white/40">
+            <div class="flex items-center space-x-2">
+                <span class="status-dot active bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
+                <span class="text-emerald-500 text-[10px]">Supreme Intel Active</span>
+            </div>
+            <div class="text-[10px]" x-text="currentTime"></div>
+        </div>
+    </nav>
+
+    <main class="flex-1 overflow-hidden grid grid-cols-12 gap-4 p-4 h-[calc(100vh-5.5rem)]">
+
+        <!-- Sidebar: Agent List -->
+        <aside class="col-span-3 flex flex-col space-y-4">
+            <div class="glass-panel p-6 flex-1 overflow-y-auto">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-white/30 mb-6">Agent Collective</h2>
+
+                <div class="space-y-4">
+                    <template x-for="agent in agents" :key="agent.agent_id">
+                        <div class="p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 cursor-pointer transition-all"
+                            @click="selectAgent(agent)">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[11px] font-black uppercase tracking-widest"
+                                    :class="agent.agent_id === 'satoshi' ? 'text-emerald-400' : 'text-purple-400'"
+                                    x-text="agent.agent_id"></span>
+                                <div class="status-dot active"
+                                    :class="agent.agent_id === 'satoshi' ? 'bg-emerald-400' : 'bg-purple-400'"></div>
                             </div>
-                            <div class="text-right text-xs text-gray-400">
-                                <span x-text="alert.value"></span>
-                            </div>
+                            <div class="text-[9px] text-white/30 uppercase truncate"
+                                x-text="agent.system_prompt.substring(0, 40) + '...'"></div>
                         </div>
                     </template>
                 </div>
             </div>
-        </div>
 
-        <!-- Right Column: Command & Status -->
-        <div class="col-span-12 md:col-span-4 space-y-6">
-            <!-- Command Input -->
-            <div class="border-2 border-white p-4">
-                <h2 class="uppercase font-bold mb-4">Command Input</h2>
-                <form @submit.prevent="sendCommand">
-                    <textarea 
-                        x-model="command"
-                        class="w-full bg-black border border-white p-2 text-white font-mono focus:outline-none focus:border-gray-500 h-32 resize-none"
-                        placeholder="Type instruction..."></textarea>
-                    <button type="submit" class="w-full bg-white text-black font-bold uppercase py-2 mt-4 hover:bg-gray-200">Execute</button>
-                </form>
+            <!-- Global Stats -->
+            <div class="glass-panel p-4 h-32 flex flex-col justify-center">
+                <div class="text-[10px] uppercase text-white/30 font-bold mb-1">Macro / BTC</div>
+                <div class="flex items-baseline space-x-2">
+                    <span class="text-2xl font-bold tracking-tighter" x-text="btc.price">$00,000</span>
+                    <span class="text-xs font-bold text-emerald-500">DYNAMIC</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center: Dynamic View (Console or HQ) -->
+        <section class="col-span-9 flex flex-col glass-panel overflow-hidden border-white/10 relative">
+
+            <!-- VIEW: CONSOLE -->
+            <div x-show="view === 'console'" class="flex flex-col h-full">
+                <div class="flex-1 overflow-y-auto p-12 space-y-8 scrollbar-hide" id="chat-feed">
+                    <template x-for="msg in messages" :key="msg.id">
+                        <div class="message-node animate-fade-in"
+                            :class="msg.agent === 'SATOSHI' ? 'border-emerald-500/20' : msg.agent === 'JOKER' ? 'border-purple-500/20' : 'border-white/20'">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span
+                                    class="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border"
+                                    :class="msg.agent === 'SATOSHI' ? 'satoshi-tag' : msg.agent === 'JOKER' ? 'joker-tag' : 'punisher-tag'"
+                                    x-text="msg.agent"></span>
+                                <span class="text-[10px] font-mono text-white/20" x-text="msg.time"></span>
+                            </div>
+                            <div class="text-sm leading-relaxed text-white/70 font-medium" x-html="msg.text"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Console Input -->
+                <div class="h-24 p-6 input-area flex items-center space-x-4">
+                    <input type="text" x-model="userInput" @keydown.enter="sendCommand" placeholder="ENTER COMMAND..."
+                        class="flex-1 bg-transparent border-none focus:ring-0 text-sm font-semibold tracking-wide placeholder:text-white/10 text-white">
+                    <button @click="sendCommand"
+                        class="h-10 px-8 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded hover:bg-gray-200 transition-all">Execute</button>
+                </div>
             </div>
 
-            <!-- Active Agents -->
-            <div class="border-2 border-white p-4">
-                <h2 class="uppercase font-bold mb-4">Active Agents</h2>
-                <ul class="space-y-2 text-sm">
-                    <li class="flex justify-between">
-                        <span>ORCHESTRATOR</span>
-                        <span class="text-green-500">IDLE</span>
-                    </li>
-                    <li class="flex justify-between">
-                        <span>WHALE_WATCHER</span>
-                        <span class="text-green-500 animate-pulse">MONITORING</span>
-                    </li>
-                    <li class="flex justify-between">
-                        <span>NEWS_CONSUMER</span>
-                        <span class="text-green-500">ACTIVE</span>
-                    </li>
-                </ul>
+            <!-- VIEW: HQ (Config) -->
+            <div x-show="view === 'hq'" class="p-12 h-full overflow-y-auto space-y-8 animate-fade-in">
+                <div class="flex justify-between items-end border-b border-white/10 pb-6">
+                    <div>
+                        <h2 class="text-2xl font-black uppercase tracking-tighter mb-1"
+                            x-text="'Agent HQ: ' + selectedAgent.agent_id"></h2>
+                        <p class="text-xs text-white/40 uppercase tracking-widest">Configuration & Identity Matrix</p>
+                    </div>
+                    <button @click="saveAgentConfig"
+                        class="px-6 py-2 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded">Save
+                        Changes</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-12">
+                    <!-- Config Form -->
+                    <div class="space-y-6">
+                        <div>
+                            <label
+                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">System
+                                Prompt (Identity)</label>
+                            <textarea x-model="selectedAgent.system_prompt"
+                                class="w-full h-48 bg-white/5 border border-white/10 rounded-lg p-4 text-sm font-medium focus:outline-none focus:border-white/20 resize-none"></textarea>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">Internal
+                                Temperature: <span x-text="selectedAgent.temperature"></span></label>
+                            <input type="range" min="0" max="1" step="0.1" x-model="selectedAgent.temperature"
+                                class="w-full accent-white">
+                        </div>
+                    </div>
+
+                    <!-- Task History / Memory -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-4">Task
+                                Resolution Log</label>
+                            <div class="space-y-3">
+                                <template x-for="task in activeTasks" :key="task.timestamp">
+                                    <div
+                                        class="p-3 border border-white/5 bg-white/5 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <div class="text-[11px] font-bold text-white/80" x-text="task.task"></div>
+                                            <div class="text-[9px] text-white/20 uppercase tracking-widest mt-1"
+                                                x-text="new Date(task.timestamp).toLocaleString()"></div>
+                                        </div>
+                                        <span class="text-[9px] font-black text-emerald-500 uppercase">Success</span>
+                                    </div>
+                                </template>
+                                <div x-show="activeTasks.length === 0" class="text-xs text-white/20 italic">No tasks
+                                    recorded for this session.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
-        function dashboard() {
+        function agentUI() {
             return {
-                time: new Date().toLocaleTimeString(),
-                command: '',
-                btc: { price: '$94,520.00', change: 2.4 },
-                alerts: [
-                    { id: 1, time: '14:20', type: 'MOVE', message: 'Wallet 0x82...99 moved 500 BTC to Coinbase', value: '$47.2M' },
-                    { id: 2, time: '14:18', type: 'BUY', message: 'Accumulation detected in Cohort 3', value: 'High' }
-                ],
+                view: 'console',
+                currentTime: '',
+                userInput: '',
+                messages: [{ id: Date.now(), agent: 'PUNISHER', time: 'SYS', text: 'Supreme Orchestrator Active. All subagents operational.' }],
+                btc: { price: '$ Loading...', change: 0.00 },
+                agents: [],
+                selectedAgent: { agent_id: 'punisher', system_prompt: '', temperature: 0.7 },
+                activeTasks: [],
                 init() {
-                    setInterval(() => {
-                        this.time = new Date().toLocaleTimeString();
-                    }, 1000);
-                    // Connect WebSocket here in real impl
+                    this.updateTime();
+                    setInterval(() => this.updateTime(), 1000);
+                    this.connectSSE();
+                    this.refreshAgents();
                 },
-                sendCommand() {
-                    console.log('Sending:', this.command);
-                    this.command = '';
+                updateTime() {
+                    this.currentTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+                },
+                async refreshAgents() {
+                    const resp = await fetch('/api/agents/config');
+                    this.agents = await resp.json();
+                },
+                async openHQ() {
+                    this.view = 'hq';
+                    await this.refreshAgents();
+                    this.selectAgent(this.agents.find(a => a.agent_id === 'punisher') || this.agents[0]);
+                },
+                async selectAgent(agent) {
+                    this.selectedAgent = JSON.parse(JSON.stringify(agent));
+                    const resp = await fetch(`/api/agents/tasks?agent=${agent.agent_id}`);
+                    this.activeTasks = await resp.json();
+                },
+                async saveAgentConfig() {
+                    await fetch('/api/agents/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.selectedAgent)
+                    });
+                    this.refreshAgents();
+                },
+                connectSSE() {
+                    const evtSource = new EventSource("/api/events");
+                    evtSource.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        let agent = "ORCHESTRATOR";
+                        let rawText = data.content;
+
+                        if (rawText.includes("[💎]")) agent = "SATOSHI";
+                        else if (rawText.includes("[📺]")) agent = "JOKER";
+
+                        if (rawText.includes("BTC: $")) {
+                            const match = rawText.match(/BTC: \$([\d,]+\.\d+)/);
+                            if (match) this.btc.price = "$" + match[1];
+                        }
+
+                        this.messages.push({
+                            id: Date.now(), agent: agent, time: this.currentTime,
+                            text: rawText.replace(/\[💎\]|\[📺\]/g, "").trim()
+                        });
+
+                        this.$nextTick(() => {
+                            const feed = document.getElementById('chat-feed');
+                            if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+                        });
+                    };
+                },
+                async sendCommand() {
+                    if (!this.userInput.trim()) return;
+                    const cmd = this.userInput;
+                    this.userInput = '';
+                    this.messages.push({ id: Date.now(), agent: 'COMMAND', time: this.currentTime, text: cmd });
+                    await fetch('/api/command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: cmd })
+                    });
                 }
             }
         }
     </script>
 </body>
+
 </html>
