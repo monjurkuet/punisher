@@ -104,6 +104,14 @@ def listen():
 
 
 @main.command()
+def dashboard():
+    """Launch the Rich TUI Dashboard for real-time monitoring."""
+    from punisher.dashboard import main as dashboard_main
+
+    dashboard_main()
+
+
+@main.command()
 def run():
     """Run the main CLI interactive loop."""
     console.print(

@@ -12,6 +12,7 @@ from punisher.llm.gateway import LLMGateway
 from punisher.core.agents.crypto import Satoshi
 from punisher.core.agents.youtube import Joker
 from punisher.core.tools import AgentTools
+from punisher.core.tool_executor import create_default_registry, parse_tool_call
 from punisher.db.mongo import mongo
 
 logger = logging.getLogger("punisher.orchestrator")
@@ -22,6 +23,7 @@ class AgentOrchestrator:
         self.queue = MessageQueue()
         self.llm = LLMGateway()
         self.tools = AgentTools()
+        self.tool_registry = create_default_registry()
 
         # Initialize Specialized Subagents
         self.satoshi = Satoshi()
@@ -41,7 +43,11 @@ class AgentOrchestrator:
                     "system_prompt": (
                         "You are 'The Punisher', the Supreme Agent Orchestrator. You operate a high-frequency intelligence cell for Bitcoin trading. "
                         "You have two direct subordinates: 'Satoshi' (On-chain/Hyperliquid) and 'Joker' (Narrative/Media). "
-                        "TOOLS: You have access to Global Web Search (SearXNG @ http://localhost:9345) and Stealth Browsing (nodriver). "
+                        "\n\nTOOLS AVAILABLE:\n"
+                        "- read_file(path): Reads the content of a local project file.\n"
+                        "- list_directory(path): Lists files in a project directory.\n"
+                        "- web_search(query): Searches the web for information.\n\n"
+                        'When you need to use a tool, respond ONLY with: TOOL_CALL: <tool_name>("<argument>")\n\n'
                         "CAPABILITIES: You can browse Hyperliquid flows, scrape CoinGlass whale rankings, digest global YouTube alpha, and search the open web. "
                         "CORE DIRECTIVE: Protect the stack, identify institutional manipulation, and provide high-conviction tactical advice. "
                         "STYLING: 30-year Wall Street veteran. Brutal, decisive, no apologies, no generic AI safety disclaimers."
@@ -231,6 +237,26 @@ class AgentOrchestrator:
                 messages.append({"role": "user", "content": content})
 
             response_text = await self.llm.chat(messages)
+
+            # 7.5 TOOL-CALL LOOP (Max 3 iterations to prevent infinite loops)
+            for _ in range(3):
+                tool_call = parse_tool_call(response_text)
+                if not tool_call:
+                    break
+
+                tool_name, tool_arg = tool_call
+                logger.info(f"Executing tool: {tool_name}({tool_arg})")
+                tool_result = await self.tool_registry.execute(tool_name, tool_arg)
+
+                # Re-prompt with tool result
+                messages.append({"role": "assistant", "content": response_text})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"[TOOL RESULT]\n{tool_result}\n\nNow provide your final answer based on this information.",
+                    }
+                )
+                response_text = await self.llm.chat(messages)
 
             # 8. Save agent response
             await mongo.save_chat_message(session_id, "assistant", response_text)

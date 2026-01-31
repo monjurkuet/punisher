@@ -49,7 +49,7 @@ The **Punisher** is a sophisticated, privacy-first AI intelligence cell designed
 ## ⚡ Usage
 
 ### 1. Launch the Mission Control
-Starts the Orchestrator and all monitoring subsystems.
+Starts the Orchestrator, Telegram bot, and Research Scheduler.
 ```bash
 uv run python src/punisher/server.py
 ```
@@ -66,8 +66,24 @@ View raw hyperliquid feeds and agent logs in real-time.
 uv run punisher listen
 ```
 
-### 4. Open Web Dashboard
+### 4. Launch Rich TUI Dashboard
+Full-screen dashboard with live intel tape and positions.
+```bash
+uv run punisher dashboard
+```
+
+### 5. Open Web Dashboard
 Accessible at `http://localhost:3000/`.
+
+---
+
+### 🔧 Tool-Calling
+The agents can now execute local tools:
+- `read_file(path)`: Read project files.
+- `list_directory(path)`: List directory contents.
+- `web_search(query)`: Search the web.
+
+Ask: *"Read AGENTS.MD and tell me about the agents"* to trigger file access.
 
 ---
 

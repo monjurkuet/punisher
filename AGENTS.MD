@@ -25,10 +25,15 @@ The analyst for market sentiment and media-driven price action.
 ---
 
 ## 🛠️ Global Intelligence Command (Unified Tools)
-All agents have access to a shared tactical belt (`src/punisher/core/tools.py`):
+All agents have access to a shared tactical belt (`src/punisher/core/tools.py` + `tool_executor.py`):
 1. **Global Search**: High-signal lookup via local SearXNG engine (`http://localhost:9345`).
 2. **Stealth Browsing**: `nodriver`-powered browser for deep-diving live web content without detection.
 3. **Local Research**: Knowledge retrieval from SQLite and MongoDB time-series data.
+4. **File Access**: Agents can read project files and list directories to understand the codebase.
+
+### Tool-Calling Protocol
+When an agent needs information, it issues: `TOOL_CALL: <tool_name>("<argument>")`
+The Orchestrator executes the tool and re-prompts with the result.
 
 ## 📡 Communication Protocol
 Intelligence flows through a local SQLite-based message bus. 

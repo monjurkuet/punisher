@@ -11,6 +11,7 @@ from punisher.config import settings
 from punisher.bus.queue import MessageQueue
 from punisher.db.mongo import mongo
 from punisher.integrations.telegram import TelegramBot
+from punisher.scheduler.research import ResearchScheduler
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -18,18 +19,21 @@ logger = logging.getLogger("punisher.server")
 
 orchestrator = AgentOrchestrator()
 telegram = TelegramBot()
+research_scheduler = ResearchScheduler()
 queue = MessageQueue()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Run orchestrator and telegram in background
+    # Startup: Run orchestrator, telegram, and research scheduler
     t1 = asyncio.create_task(orchestrator.start())
     t2 = asyncio.create_task(telegram.start())
+    research_scheduler.start()
     yield
     # Shutdown
     orchestrator.stop()
     await telegram.stop()
+    research_scheduler.stop()
     await t1
     if t2:
         await t2

@@ -2,7 +2,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import httpx
 import logging
 import random
-import asyncio
 from punisher.config import settings
 
 logger = logging.getLogger("punisher.research")
@@ -23,9 +22,9 @@ class ResearchScheduler:
             )
 
             async with httpx.AsyncClient(timeout=10) as client:
-                # Assuming the search engine has a /search endpoint
+                # Use correct SearXNG endpoint
                 resp = await client.get(
-                    f"{self.search_url}/search", params={"q": topic}
+                    f"{self.search_url}/search/text", params={"query": topic}
                 )
                 if resp.status_code == 200:
                     data = resp.json()
