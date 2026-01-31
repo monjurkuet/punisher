@@ -54,16 +54,43 @@ class TelegramBot:
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text
-        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
 
-        # Push to queue
-        payload = {"source": "telegram", "user_id": user_id, "content": text}
-        self.queue.push("punisher:inbox", payload)
+        import json
+
+        payload = {"source": f"telegram:{chat_id}", "content": text}
+        self.queue.push("punisher:inbox", json.dumps(payload))
 
     async def response_listener(self):
         """Listen for outgoing messages addressed to telegram"""
         while self.running:
-            # In a real impl, payload should contain target chat_id
-            # For MVP, we stick to CLI or need to store state mapping msg_id -> chat_id
-            # This is a placeholder for the reverse flow
-            await asyncio.sleep(1)
+            try:
+                # Poll for all keys starting with punisher:telegram:
+                # For simplicity in this structure, we listen to a specific broadcast channel
+                # Or handle specific chat responses
+
+                # Check for responses specifically for telegram sources
+                # The Orchestrator pushs to 'punisher:telegram:<chat_id>:out'
+
+                # In this architecture, we'll monitor a generic 'punisher:telegram:out'
+                # where the orchestrator puts JSON with {chat_id: ..., content: ...}
+                msg_raw = self.queue.pop("punisher:telegram:out", timeout=0)
+                if msg_raw:
+                    import json
+
+                    data = json.loads(msg_raw)
+                    chat_id = data.get("chat_id")
+                    content = data.get("content")
+                    if chat_id and content:
+                        await self.app.bot.send_message(chat_id=chat_id, text=content)
+
+                # Also handle general broadcasts to a default channel if configured
+                # broadcast_msg = self.queue.pop("punisher:cli:out", timeout=0)
+                # if broadcast_msg:
+                #     # Optional: send important broadcasts to a specialized telegram group
+                #     pass
+
+            except Exception as e:
+                logger.error(f"Telegram listener error: {e}")
+
+            await asyncio.sleep(0.5)

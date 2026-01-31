@@ -5,11 +5,10 @@ Handles wallet discovery, monitoring, and alpha extraction.
 
 import asyncio
 import logging
-import json
-from datetime import datetime, UTC
 from punisher.bus.queue import MessageQueue
 from punisher.crypto.hyperliquid import HyperliquidMonitor
 from punisher.scrapers.coinglass import CoinGlassScraper
+from punisher.llm.gateway import LLMGateway
 
 logger = logging.getLogger("punisher.agents.crypto")
 
@@ -19,26 +18,22 @@ class Satoshi:
         self.queue = MessageQueue()
         self.hl_monitor = HyperliquidMonitor()
         self.cg_scraper = CoinGlassScraper()
+        self.llm = LLMGateway()
         self.running = False
 
     async def start(self):
         """Start the crypto-dedicated subsystems"""
         self.running = True
         logger.info("Satoshi initialized. Managing Hyperliquid and CoinGlass.")
-
-        # Start Hyperliquid WebSocket Monitor in background
         asyncio.create_task(self.hl_monitor.start())
-
-        # Periodic CoinGlass Scraper (can be manually triggered or scheduled)
-        # For now, we'll keep it as a triggerable task to manage discovery volume
         await self.broadcast("Satoshi Online. Tracking institutional flows.")
 
     async def broadcast(self, msg: str):
         self.queue.push("punisher:cli:out", f"[💎] {msg}")
 
     async def get_alpha_context(self) -> str:
-        """Fetch latest alpha data for the Punisher's decision making"""
-        context = "--- CRYPTO ALPHA (HL + CG) ---\n"
+        """Fetch and synthesize crypto alpha for the Punisher"""
+        raw_data = ""
         try:
             from punisher.db.mongo import mongo
 
@@ -52,34 +47,60 @@ class Satoshi:
                 .to_list(length=3)
             )
             if wallets:
-                context += "Latest Discoveries:\n"
+                raw_data += "New High-Conviction Wallets:\n"
                 for w in wallets:
-                    context += f"- {w['address'][:10]}... (Group: {w.get('range_id')}, PnL: {w.get('pnl_str')})\n"
+                    raw_data += (
+                        f"- {w['address'][:10]}... (PnL: {w.get('pnl_str', 'N/A')})\n"
+                    )
 
             # 2. Significant Active Positions (Whales)
             snapshots = (
                 await db.hyperliquid_snapshots.find()
                 .sort("created_at", -1)
-                .limit(3)
-                .to_list(length=3)
+                .limit(2)
+                .to_list(length=2)
             )
             if snapshots:
-                context += "\nActive Whale Movements:\n"
+                raw_data += "\nActive Whale Clips:\n"
                 for s in snapshots:
-                    value = float(s.get("account_value", 0))
-                    context += f"- {s['wallet_address'][:8]} Account: ${value:,.0f}\n"
+                    raw_data += f"- Wallet {s['wallet_address'][:8]}: Value ${float(s.get('account_value', 0)):,.0f}\n"
                     for p in s.get("positions", []):
                         if abs(float(p.get("size", 0))) > 0:
-                            coin = p.get("coin", "Unknown")
-                            side = p.get("side", "N/A")
-                            pnl = float(p.get("unrealized_pnl", 0))
-                            context += f"  > {coin} {side} (PnL: ${pnl:,.0f})\n"
+                            raw_data += f"  > {p.get('coin')} {p.get('side')} (${float(p.get('unrealized_pnl', 0)):,.0f} uPNL)\n"
+
+            if not raw_data:
+                return "--- CRYPTO ALPHA ---\nNo significant on-chain shifts detected in current cycle."
+
+            # 3. SYNTHESIS: Use LLM to condense and identify trends
+            alpha_intel = await self.synthesize_alpha(raw_data)
+            return f"--- CRYPTO ALPHA (Synthesized) ---\n{alpha_intel}\n"
 
         except Exception as e:
-            logger.error(f"Alpha context error: {e}")
-            context += "[Alpha Data Temporarily Unavailable]\n"
+            logger.error(f"Alpha context synthesis error: {e}")
+            return "[Crypto Alpha Synthesis Failed]\n"
 
-        return context
+    async def synthesize_alpha(self, raw_data: str) -> str:
+        """Satoshi's internal intelligence layer"""
+        try:
+            prompt = (
+                f"ON-CHAIN RAW DATA:\n{raw_data}\n\n"
+                "You are 'Satoshi', an expert on-chain detective. Synthesize this raw data into a concise alpha report. "
+                "Identify any aggressive accumulation, recurring coin themes, or significant risk shifts. "
+                "Keep it under 80 words. Be sharp and institutional."
+            )
+            response = await self.llm.chat(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are 'Satoshi'. On-chain Intelligence Officer.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Synthesis fallback error: {e}")
+            return raw_data[:500]
 
     async def process_task(self, command: str) -> str:
         """Execute specific crypto commands"""
@@ -96,6 +117,10 @@ class Satoshi:
             return f"Currently tracking {count} high-conviction wallets across Hyperliquid."
 
         return "Acknowledged. Monitoring the tape."
+
+    async def get_live_btc_price(self) -> float:
+        """Fetch BTC price from the internal HL stream"""
+        return self.hl_monitor.get_mid_price("BTC")
 
     def stop(self):
         self.running = False

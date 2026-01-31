@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PUNISHER // SUPREME HQ</title>
+    <title>PUNISHER // COMMAND CENTER</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="static/styles.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -22,16 +22,16 @@
 
         <div class="flex space-x-1 bg-white/5 p-1 rounded-lg">
             <button @click="view = 'console'" :class="view === 'console' ? 'bg-white/10 text-white' : 'text-white/40'"
-                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">Console</button>
+                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">Command</button>
             <button @click="openHQ()" :class="view === 'hq' ? 'bg-white/10 text-white' : 'text-white/40'"
-                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">HQ /
-                Config</button>
+                class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all">Intelligence
+                HQ</button>
         </div>
 
         <div class="flex items-center space-x-8 text-xs font-semibold tracking-widest uppercase text-white/40">
             <div class="flex items-center space-x-2">
                 <span class="status-dot active bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
-                <span class="text-emerald-500 text-[10px]">Supreme Intel Active</span>
+                <span class="text-emerald-500 text-[10px]">Strategic Flow Active</span>
             </div>
             <div class="text-[10px]" x-text="currentTime"></div>
         </div>
@@ -40,62 +40,64 @@
     <main class="flex-1 overflow-hidden grid grid-cols-12 gap-4 p-4 h-[calc(100vh-5.5rem)]">
 
         <!-- Sidebar: Agent List -->
-        <aside class="col-span-3 flex flex-col space-y-4">
+        <aside class="col-span-2 flex flex-col space-y-4">
             <div class="glass-panel p-6 flex-1 overflow-y-auto">
-                <h2 class="text-xs font-bold uppercase tracking-widest text-white/30 mb-6">Agent Collective</h2>
-
+                <h2 class="text-xs font-bold uppercase tracking-widest text-white/30 mb-6">Hierarchy</h2>
                 <div class="space-y-4">
                     <template x-for="agent in agents" :key="agent.agent_id">
                         <div class="p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 cursor-pointer transition-all"
                             @click="selectAgent(agent)">
                             <div class="flex items-center justify-between mb-1">
-                                <span class="text-[11px] font-black uppercase tracking-widest"
-                                    :class="agent.agent_id === 'satoshi' ? 'text-emerald-400' : 'text-purple-400'"
+                                <span class="text-[10px] font-black uppercase tracking-widest"
+                                    :class="agent.agent_id === 'satoshi' ? 'text-emerald-400' : agent.agent_id === 'joker' ? 'text-purple-400' : 'text-red-400'"
                                     x-text="agent.agent_id"></span>
-                                <div class="status-dot active"
-                                    :class="agent.agent_id === 'satoshi' ? 'bg-emerald-400' : 'bg-purple-400'"></div>
                             </div>
-                            <div class="text-[9px] text-white/30 uppercase truncate"
-                                x-text="agent.system_prompt.substring(0, 40) + '...'"></div>
+                            <div class="text-[8px] text-white/20 uppercase tracking-tighter"
+                                x-text="agent.agent_id === 'punisher' ? 'Supreme' : 'Subagent'"></div>
                         </div>
                     </template>
                 </div>
             </div>
 
-            <!-- Global Stats -->
-            <div class="glass-panel p-4 h-32 flex flex-col justify-center">
-                <div class="text-[10px] uppercase text-white/30 font-bold mb-1">Macro / BTC</div>
-                <div class="flex items-baseline space-x-2">
-                    <span class="text-2xl font-bold tracking-tighter" x-text="btc.price">$00,000</span>
-                    <span class="text-xs font-bold text-emerald-500">DYNAMIC</span>
-                </div>
+            <!-- Market Stats -->
+            <div class="glass-panel p-4 h-24 flex flex-col justify-center">
+                <div class="text-[9px] uppercase text-white/20 font-bold mb-1 tracking-widest">BTC Price</div>
+                <div class="text-xl font-bold tracking-tighter" x-text="btc.price">$00,000</div>
             </div>
         </aside>
 
-        <!-- Center: Dynamic View (Console or HQ) -->
-        <section class="col-span-9 flex flex-col glass-panel overflow-hidden border-white/10 relative">
-
-            <!-- VIEW: CONSOLE -->
+        <!-- Center: Strategic Console (Reserved for Important Updates) -->
+        <section class="col-span-7 flex flex-col glass-panel overflow-hidden border-white/10 relative">
             <div x-show="view === 'console'" class="flex flex-col h-full">
+                <div class="px-12 pt-8 flex items-center justify-between border-b border-white/5 pb-4">
+                    <h2 class="text-[10px] font-bold uppercase tracking-[0.3em] text-white/30">Strategic Console</h2>
+                    <span class="text-[8px] px-2 py-0.5 border border-white/10 rounded uppercase text-white/40">Awaiting
+                        Signal</span>
+                </div>
+
                 <div class="flex-1 overflow-y-auto p-12 space-y-8 scrollbar-hide" id="chat-feed">
-                    <template x-for="msg in messages" :key="msg.id">
+                    <template x-for="msg in consoleMessages" :key="msg.id">
                         <div class="message-node animate-fade-in"
                             :class="msg.agent === 'SATOSHI' ? 'border-emerald-500/20' : msg.agent === 'JOKER' ? 'border-purple-500/20' : 'border-white/20'">
                             <div class="flex items-center space-x-3 mb-2">
-                                <span
-                                    class="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border"
+                                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border"
                                     :class="msg.agent === 'SATOSHI' ? 'satoshi-tag' : msg.agent === 'JOKER' ? 'joker-tag' : 'punisher-tag'"
                                     x-text="msg.agent"></span>
-                                <span class="text-[10px] font-mono text-white/20" x-text="msg.time"></span>
+                                <span class="text-[9px] font-mono text-white/20" x-text="msg.time"></span>
                             </div>
-                            <div class="text-sm leading-relaxed text-white/70 font-medium" x-html="msg.text"></div>
+                            <div class="text-sm leading-relaxed text-white/80 font-medium" x-html="msg.text"></div>
                         </div>
                     </template>
+                    <div x-show="consoleMessages.length === 0"
+                        class="h-full flex items-center justify-center opacity-10">
+                        <div class="text-[40px] font-black italic tracking-tighter">WAITING FOR ACTION...</div>
+                    </div>
                 </div>
 
                 <!-- Console Input -->
                 <div class="h-24 p-6 input-area flex items-center space-x-4">
-                    <input type="text" x-model="userInput" @keydown.enter="sendCommand" placeholder="ENTER COMMAND..."
+                    <input type="text" x-model="userInput" @keydown.enter="sendCommand"
+                        placeholder="EXECUTE SUPREME COMMAND..."
                         class="flex-1 bg-transparent border-none focus:ring-0 text-sm font-semibold tracking-wide placeholder:text-white/10 text-white">
                     <button @click="sendCommand"
                         class="h-10 px-8 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded hover:bg-gray-200 transition-all">Execute</button>
@@ -108,57 +110,76 @@
                     <div>
                         <h2 class="text-2xl font-black uppercase tracking-tighter mb-1"
                             x-text="'Agent HQ: ' + selectedAgent.agent_id"></h2>
-                        <p class="text-xs text-white/40 uppercase tracking-widest">Configuration & Identity Matrix</p>
+                        <p class="text-xs text-white/40 uppercase tracking-widest">Identity & Operational Matrix</p>
                     </div>
                     <button @click="saveAgentConfig"
-                        class="px-6 py-2 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded">Save
+                        class="px-6 py-2 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded">Authorize
                         Changes</button>
                 </div>
 
                 <div class="grid grid-cols-2 gap-12">
-                    <!-- Config Form -->
                     <div class="space-y-6">
                         <div>
                             <label
-                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">System
-                                Prompt (Identity)</label>
+                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">Internal
+                                Persona (System Prompt)</label>
                             <textarea x-model="selectedAgent.system_prompt"
                                 class="w-full h-48 bg-white/5 border border-white/10 rounded-lg p-4 text-sm font-medium focus:outline-none focus:border-white/20 resize-none"></textarea>
                         </div>
                         <div>
                             <label
-                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">Internal
-                                Temperature: <span x-text="selectedAgent.temperature"></span></label>
+                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">Volatility
+                                Threshold (Temperature): <span x-text="selectedAgent.temperature"></span></label>
                             <input type="range" min="0" max="1" step="0.1" x-model="selectedAgent.temperature"
                                 class="w-full accent-white">
                         </div>
                     </div>
 
-                    <!-- Task History / Memory -->
                     <div class="space-y-6">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-4">Task
-                                Resolution Log</label>
+                            <label
+                                class="block text-[10px] font-bold uppercase tracking-widest text-white/30 mb-4">Command
+                                History Log</label>
                             <div class="space-y-3">
                                 <template x-for="task in activeTasks" :key="task.timestamp">
                                     <div
                                         class="p-3 border border-white/5 bg-white/5 rounded-lg flex justify-between items-center">
-                                        <div>
-                                            <div class="text-[11px] font-bold text-white/80" x-text="task.task"></div>
-                                            <div class="text-[9px] text-white/20 uppercase tracking-widest mt-1"
-                                                x-text="new Date(task.timestamp).toLocaleString()"></div>
-                                        </div>
-                                        <span class="text-[9px] font-black text-emerald-500 uppercase">Success</span>
+                                        <div class="text-[11px] font-bold text-white/80" x-text="task.task"></div>
+                                        <span class="text-[8px] font-black text-emerald-500 uppercase">Success</span>
                                     </div>
                                 </template>
-                                <div x-show="activeTasks.length === 0" class="text-xs text-white/20 italic">No tasks
-                                    recorded for this session.</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </section>
+
+        <!-- Right: Live Intelligence Tape (High-Velocity Websocket Stream) -->
+        <aside class="col-span-3 flex flex-col glass-panel overflow-hidden border-white/10">
+            <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                <h2 class="text-[9px] font-black uppercase tracking-widest text-white/30">Live Alpha Stream</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-[8px] font-bold text-emerald-500">WS-DATA</span>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide text-xs" id="stream-tape">
+                <template x-for="item in streamMessages" :key="item.id">
+                    <div class="p-2 border-l border-white/10 bg-white/5 animate-fade-in font-mono text-[10px]">
+                        <div class="flex justify-between text-white/20 mb-1">
+                            <span x-text="item.agent"></span>
+                            <span x-text="item.time"></span>
+                        </div>
+                        <div class="text-white/60 break-all" x-text="item.text"></div>
+                    </div>
+                </template>
+                <div x-show="streamMessages.length === 0"
+                    class="text-center pt-20 text-[9px] text-white/20 uppercase tracking-widest">Searching the void...
+                </div>
+            </div>
+        </aside>
     </main>
 
     <script>
@@ -167,7 +188,7 @@
                 view: 'console',
                 currentTime: '',
                 userInput: '',
-                messages: [{ id: Date.now(), agent: 'PUNISHER', time: 'SYS', text: 'Supreme Orchestrator Active. All subagents operational.' }],
+                messages: [{ id: Date.now(), agent: 'PUNISHER', type: 'INTEL', time: 'SYS', text: 'Supreme System Online. Strategic Console standing by.' }],
                 btc: { price: '$ Loading...', change: 0.00 },
                 agents: [],
                 selectedAgent: { agent_id: 'punisher', system_prompt: '', temperature: 0.7 },
@@ -180,6 +201,14 @@
                 },
                 updateTime() {
                     this.currentTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+                },
+                get consoleMessages() {
+                    // Main console only shows non-stream signals (Important Updates/Commands)
+                    return this.messages.filter(m => m.tag === 'INBOX' || m.type === 'INTEL' || m.agent === 'COMMAND');
+                },
+                get streamMessages() {
+                    // Tape shows the raw high-velocity data
+                    return this.messages.filter(m => m.type === 'WHALE' || m.type === 'POS').slice(-50);
                 },
                 async refreshAgents() {
                     const resp = await fetch('/api/agents/config');
@@ -208,10 +237,15 @@
                     evtSource.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         let agent = "ORCHESTRATOR";
+                        let type = "INTEL";
+                        let tag = data.type === 'response' ? 'INBOX' : 'BROADCAST';
                         let rawText = data.content;
 
                         if (rawText.includes("[💎]")) agent = "SATOSHI";
                         else if (rawText.includes("[📺]")) agent = "JOKER";
+
+                        if (rawText.includes("[WALLET]")) type = "WHALE";
+                        else if (rawText.includes("[POS]")) type = "POS";
 
                         if (rawText.includes("BTC: $")) {
                             const match = rawText.match(/BTC: \$([\d,]+\.\d+)/);
@@ -219,13 +253,22 @@
                         }
 
                         this.messages.push({
-                            id: Date.now(), agent: agent, time: this.currentTime,
-                            text: rawText.replace(/\[💎\]|\[📺\]/g, "").trim()
+                            id: Date.now(), agent: agent, type: type, tag: tag, time: this.currentTime,
+                            text: rawText.replace(/\[💎\]|\[📺\]|\[WALLET\]|\[POS\]/g, "").trim()
                         });
 
+                        // Only auto-scroll the main feed if it's an inbox message
+                        if (tag === 'INBOX') {
+                            this.$nextTick(() => {
+                                const feed = document.getElementById('chat-feed');
+                                if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+                            });
+                        }
+
+                        // Auto-scroll the stream tape
                         this.$nextTick(() => {
-                            const feed = document.getElementById('chat-feed');
-                            if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+                            const tape = document.getElementById('stream-tape');
+                            if (tape) tape.scrollTo({ top: tape.scrollHeight, behavior: 'smooth' });
                         });
                     };
                 },
@@ -233,7 +276,7 @@
                     if (!this.userInput.trim()) return;
                     const cmd = this.userInput;
                     this.userInput = '';
-                    this.messages.push({ id: Date.now(), agent: 'COMMAND', time: this.currentTime, text: cmd });
+                    this.messages.push({ id: Date.now(), agent: 'COMMAND', type: 'INTEL', tag: 'INBOX', time: this.currentTime, text: cmd });
                     await fetch('/api/command', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

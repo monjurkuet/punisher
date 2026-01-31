@@ -5,7 +5,6 @@ MongoDB Client for Hyperliquid WebSocket data storage
 import logging
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import MongoClient
 from punisher.config import settings
 
 logger = logging.getLogger("punisher.db.mongo")
@@ -50,15 +49,15 @@ class MongoStorage:
         db = await self.get_db()
 
         summary = parsed_data.get("summary", {})
-        positions = parsed_data.get("asset_positions", [])
-        orders = parsed_data.get("open_orders", [])
-        snapshot_time_ms = summary.get("snapshot_time_ms")
+        positions = parsed_data.get("positions", [])
+        orders = parsed_data.get("orders", [])
+        snapshot_time_ms = parsed_data.get("ts")
 
         # Helper to generate state hash
         def get_state_hash(s, p, o):
             # Sort lists to ensure consistent order
             p_sorted = sorted(p, key=lambda x: x.get("coin"))
-            o_sorted = sorted(o, key=lambda x: x.get("order_id"))
+            o_sorted = sorted(o, key=lambda x: x.get("order_id", x.get("oid", "")))
 
             # Key state components
             state = {
@@ -154,14 +153,43 @@ class MongoStorage:
 
         doc = {
             "coin": coin,
-            "size": trade_data.get("size"),
-            "price": trade_data.get("price"),
+            "sz": trade_data.get("sz"),
+            "px": trade_data.get("px"),
             "side": trade_data.get("side"),
-            "usd_value": trade_data.get("usd_value"),
+            "usd_val": trade_data.get("usd_val"),
+            "ts": trade_data.get("ts"),
+            "hash": trade_data.get("hash"),
             "created_at": datetime.utcnow(),
         }
 
         result = await db.whale_trades.insert_one(doc)
+        return result.inserted_id
+
+    async def save_market_mids(self, mids: dict):
+        """Save mid-price snapshot for key assets"""
+        db = await self.get_db()
+
+        # We only care about major ones for history, keep the collection lean
+        subset = {k: v for k, v in mids.items() if k in ["BTC", "ETH", "SOL", "HYPE"]}
+        if not subset:
+            return None
+
+        doc = {
+            "mids": subset,
+            "ts": datetime.utcnow(),
+        }
+
+        # Update latest record instead of spawning thousands of small docs
+        # Or insert one per hour? Let's insert new for historical analysis
+        result = await db.market_prices.insert_one(doc)
+
+        # Prune: keep last 1000 snapshots (~1 week of 10-min snapshots)
+        count = await db.market_prices.count_documents({})
+        if count > 1000:
+            oldest = await db.market_prices.find().sort("ts", 1).limit(1).to_list(1)
+            if oldest:
+                await db.market_prices.delete_many({"ts": {"$lte": oldest[0]["ts"]}})
+
         return result.inserted_id
 
     async def save_market_sentiment(self, coin: str, imbalance: float, sentiment: str):

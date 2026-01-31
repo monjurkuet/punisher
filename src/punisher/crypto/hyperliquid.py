@@ -12,7 +12,8 @@ import base64
 import os
 import random
 import time
-import datetime
+from datetime import datetime, UTC
+from typing import List, Dict, Optional
 from websockets import connect
 from punisher.bus.queue import MessageQueue
 from punisher.config import settings
@@ -34,7 +35,7 @@ class HyperliquidMonitor:
     - Rotates through multiple wallets
     """
 
-    def __init__(self, wallets: list = None):
+    def __init__(self, wallets: Optional[List[str]] = None):
         self.ws_url = "wss://api.hyperliquid.xyz/ws"
         self.api_url = "https://api.hyperliquid.xyz/info"
         self.queue = MessageQueue()
@@ -49,6 +50,7 @@ class HyperliquidMonitor:
         # Connection state
         self.connection_count = 0
         self.last_activity = time.time()
+        self.last_mids: Dict[str, float] = {}  # Store live mid prices
 
     async def get_all_target_wallets(self):
         """Fetch both static and active dynamic wallets from DB"""
@@ -88,7 +90,7 @@ class HyperliquidMonitor:
                 {
                     "$set": {
                         "status": status,
-                        "last_scan_at": datetime.datetime.now(datetime.UTC),
+                        "last_scan_at": datetime.now(UTC),
                     }
                 },
                 upsert=True,  # In case it was a static wallet not in DB yet
@@ -220,25 +222,22 @@ class HyperliquidMonitor:
         return ws
 
     async def subscribe_to_wallet(self, ws, wallet_address):
-        """Subscribe to specific wallet with realistic timing"""
-        # Human browsing simulation - wait before subscribing
-        browse_delay = random.uniform(1.0, 4.0)
-        logger.debug(f"[👀] Browsing simulation: {browse_delay:.1f}s...")
-        await asyncio.sleep(browse_delay)
-
-        subscribe_msg = {
+        """Subscribe to both specific wallet and global mid prices"""
+        # 1. Subscribe to Wallet Data (webData2)
+        subscribe_wallet = {
             "method": "subscribe",
             "subscription": {"type": "webData2", "user": wallet_address},
         }
-
-        message = json.dumps(subscribe_msg)
-
-        # Typing simulation
-        typing_delay = len(message) * random.uniform(0.002, 0.005)
-        await asyncio.sleep(typing_delay)
-
-        await ws.send(message)
+        await ws.send(json.dumps(subscribe_wallet))
         logger.info(f"[📡] Monitoring wallet: {wallet_address[:10]}...")
+
+        # 2. Subscribe to Global Prices (allMids)
+        subscribe_mids = {
+            "method": "subscribe",
+            "subscription": {"type": "allMids"},
+        }
+        await ws.send(json.dumps(subscribe_mids))
+        logger.info("[📈] Subscribed to Global Price Feed (allMids)")
 
     async def start(self):
         """Main monitoring loop"""
@@ -269,11 +268,27 @@ class HyperliquidMonitor:
                         msg = await asyncio.wait_for(ws.recv(), timeout=30)
                         self.last_activity = time.time()
                         data = json.loads(msg)
+                        channel = data.get("channel")
 
-                        # Check for webData2 channel
-                        if data.get("channel") == "webData2":
-                            # Parse and broadcast wallet data
+                        if channel == "webData2":
                             await self.process_wallet_data(current_wallet, data)
+                        elif channel == "allMids":
+                            from punisher.crypto.hyperliquid_parser import (
+                                parse_market_mids,
+                            )
+                            from punisher.db.mongo import mongo
+
+                            mids = parse_market_mids(data.get("data", {}))
+                            if mids:
+                                self.last_mids.update(mids)
+                                # Periodic save to DB (every ~10 messages or so for performance)
+                                if random.random() < 0.1:
+                                    await mongo.save_market_mids(mids)
+
+                                if "BTC" in mids:
+                                    logger.info(
+                                        f"[🔥] LIVE HL FEED: BTC @ ${mids['BTC']:,.2f}"
+                                    )
 
                     except asyncio.TimeoutError:
                         logger.debug("[⏰] Waiting for data...")
@@ -299,6 +314,15 @@ class HyperliquidMonitor:
         """Process, store, and broadcast wallet data"""
         try:
             data = raw_data.get("data", {})
+
+            # Update live mids if present (HL sends mids in webData2 snapshot)
+            mids = data.get("mids")
+            if mids:
+                self.last_mids.update(mids)
+                if "BTC" in mids:
+                    logger.info(f"[🔥] LIVE HL FEED: BTC @ ${float(mids['BTC']):,.2f}")
+                logger.debug(f"Updated mids for {len(mids)} assets")
+
             parsed = parse_hyperliquid_data(data)
 
             # Save to MongoDB
@@ -314,11 +338,11 @@ class HyperliquidMonitor:
             except Exception as db_err:
                 logger.warning(f"MongoDB save failed: {db_err}")
 
-            # Extract key metrics
+            # Extract key metrics from our new clean schema
             summary = parsed.get("summary", {})
-            positions = parsed.get("asset_positions", [])
+            positions = parsed.get("positions", [])
 
-            account_value = float(summary.get("account_value", 0))
+            account_value = summary.get("account_value", 0.0)
 
             # Only broadcast if meaningful data
             if account_value > 0:
@@ -342,6 +366,10 @@ class HyperliquidMonitor:
 
         except Exception as e:
             logger.error(f"Error processing wallet data: {e}")
+
+    def get_mid_price(self, coin: str) -> float:
+        """Fetch latest mid price from the live stream"""
+        return float(self.last_mids.get(coin, 0))
 
     def stop(self):
         self.running = False

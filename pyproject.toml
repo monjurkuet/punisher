@@ -24,11 +24,14 @@ dependencies = [
     "pymongo>=4.16.0",
     "pycryptodome>=3.23.0",
     "nodriver>=0.38.post1",
+    "textual>=7.5.0",
 ]
 
 [project.scripts]
 punisher = "punisher.cli:main"
 punisher-server = "punisher.server:main"
+punisher-dash = "punisher.dashboard:main"
+punisher-tui = "punisher.tui:main"
 
 [build-system]
 requires = ["hatchling"]

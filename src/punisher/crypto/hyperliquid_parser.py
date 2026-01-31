@@ -1,78 +1,99 @@
-import json
-from typing import Dict, List, Any
 import datetime
+from typing import Dict, Any
 
 
-def safe_get(data: dict, key: str, default: Any):
-    return data.get(key) if data.get(key) is not None else default
+def safe_float(val: Any, default: float = 0.0) -> float:
+    try:
+        return float(val) if val is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_int(val: Any, default: int = 0) -> int:
+    try:
+        return int(val) if val is not None else default
+    except (ValueError, TypeError):
+        return default
 
 
 def parse_hyperliquid_data(data: dict) -> dict:
-    clearinghouse_state = data.get("clearinghouseState", {})
-    margin_summary = clearinghouse_state.get("marginSummary", {})
+    """
+    Parses webData2 snapshots into a clean, numeric format.
+    Removes garbage fields and institutionalizes the data for MongoDB.
+    """
+    state = data.get("clearinghouseState", {})
+    margin = state.get("marginSummary", {})
 
-    snapshot_time_ms = safe_get(
-        clearinghouse_state, "time", int(datetime.datetime.now().timestamp() * 1000)
+    snapshot_time = safe_int(
+        state.get("time"), int(datetime.datetime.now().timestamp() * 1000)
     )
 
     summary = {
-        "snapshot_time_ms": snapshot_time_ms,
-        "account_value": safe_get(margin_summary, "accountValue", "0.0"),
-        "total_ntl_pos": safe_get(margin_summary, "totalNtlPos", "0.0"),
-        "total_raw_usd": safe_get(margin_summary, "totalRawUsd", "0.0"),
-        "total_margin_used": safe_get(margin_summary, "totalMarginUsed", "0.0"),
-        "withdrawable": safe_get(clearinghouse_state, "withdrawable", "0.0"),
-        "cross_maintenance_margin_used": clearinghouse_state.get(
-            "crossMaintenanceMarginUsed"
-        ),
+        "snapshot_time_ms": snapshot_time,
+        "account_value": safe_float(margin.get("accountValue")),
+        "total_ntl_pos": safe_float(margin.get("totalNtlPos")),
+        "total_raw_usd": safe_float(margin.get("totalRawUsd")),
+        "total_margin_used": safe_float(margin.get("totalMarginUsed")),
+        "withdrawable": safe_float(state.get("withdrawable")),
     }
 
     asset_positions = []
-    raw_positions = clearinghouse_state.get("assetPositions", [])
+    for asset in state.get("assetPositions", []):
+        pos = asset.get("position", {})
+        coin = pos.get("coin")
+        size = safe_float(pos.get("szi"))
 
-    for asset_data in raw_positions:
-        position = asset_data.get("position", {})
-        leverage = position.get("leverage", {})
-        size_str = safe_get(position, "szi", "0")
-        coin = safe_get(position, "coin", "")
-
-        if size_str != "0" and coin:
+        if coin and size != 0:
             asset_positions.append(
                 {
                     "coin": coin,
-                    "type": safe_get(asset_data, "type", "oneWay"),
-                    "size": size_str,
-                    "leverage_type": safe_get(leverage, "type", "cross"),
-                    "leverage_value": safe_get(leverage, "value", 1),
-                    "entry_price": position.get("entryPx"),
-                    "position_value": safe_get(position, "positionValue", "0.0"),
-                    "unrealized_pnl": safe_get(position, "unrealizedPnl", "0.0"),
-                    "return_on_equity": safe_get(position, "returnOnEquity", "0.0"),
+                    "size": size,
+                    "entry_price": safe_float(pos.get("entryPx")),
+                    "position_value": safe_float(pos.get("positionValue")),
+                    "unrealized_pnl": safe_float(pos.get("unrealizedPnl")),
+                    "roc": safe_float(pos.get("returnOnEquity")),
+                    "leverage": safe_int(pos.get("leverage", {}).get("value"), 1),
                 }
             )
 
     open_orders = []
-    raw_orders = data.get("openOrders", [])
-
-    for order in raw_orders:
+    for order in data.get("openOrders", []):
         if order.get("oid") is not None:
             open_orders.append(
                 {
                     "order_id": order.get("oid"),
-                    "coin": safe_get(order, "coin", ""),
-                    "side": safe_get(order, "side", ""),
-                    "limit_price": safe_get(order, "limitPx", "0.0"),
-                    "quantity": safe_get(order, "sz", "0.0"),
-                    "timestamp_ms": safe_get(order, "timestamp", 0),
-                    "order_type": safe_get(order, "orderType", "Limit"),
-                    "reduce_only": safe_get(order, "reduceOnly", False),
-                    "time_in_force": safe_get(order, "tif", "Gtc"),
+                    "coin": order.get("coin", ""),
+                    "side": order.get("side", ""),
+                    "px": safe_float(order.get("limitPx")),
+                    "sz": safe_float(order.get("sz")),
+                    "order_type": order.get("orderType", "Limit"),
                 }
             )
 
     return {
         "summary": summary,
-        "asset_positions": asset_positions,
-        "open_orders": open_orders,
-        "snapshot_time_ms": snapshot_time_ms,
+        "positions": asset_positions,
+        "orders": open_orders,
+        "ts": snapshot_time,
+    }
+
+
+def parse_market_mids(data: dict) -> Dict[str, float]:
+    """Cleans up allMids stream data"""
+    raw_mids = data.get("mids", {})
+    return {coin: safe_float(price) for coin, price in raw_mids.items()}
+
+
+def parse_trade_data(trade: dict) -> dict:
+    """Cleans up raw trade stream data"""
+    px = safe_float(trade.get("px"))
+    sz = safe_float(trade.get("sz"))
+    return {
+        "coin": trade.get("coin"),
+        "side": trade.get("side"),
+        "px": px,
+        "sz": sz,
+        "usd_val": px * sz,
+        "ts": trade.get("time"),
+        "hash": trade.get("hash"),
     }

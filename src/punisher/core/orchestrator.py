@@ -8,7 +8,6 @@ import json
 import logging
 from datetime import datetime, UTC
 from punisher.bus.queue import MessageQueue
-from punisher.config import settings
 from punisher.llm.gateway import LLMGateway
 from punisher.core.agents.crypto import Satoshi
 from punisher.core.agents.youtube import Joker
@@ -72,8 +71,8 @@ class AgentOrchestrator:
                     "timestamp": datetime.now(UTC),
                 }
             )
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Task log error: {e}")
 
     async def start(self):
         self.running = True
@@ -103,25 +102,31 @@ class AgentOrchestrator:
 
             logger.info(f"Command received from {source}: {content}")
 
-            # 1. GATHER INTELLIGENCE
-            crypto_alpha = await self.satoshi.get_alpha_context()
-            yt_intel = await self.joker.get_intel_context()
+            # Notify TUI/CLI that processing has started
+            if source == "tui" or source == "cli":
+                self.queue.push(
+                    f"punisher:{'cli' if source == 'tui' else source}:out",
+                    "PUNISHER IS THINKING... [GATHERING INTEL]",
+                )
+
+            # 1. GATHER INTELLIGENCE (Parallelized)
+            intelligence_tasks = [
+                self.satoshi.get_alpha_context(),
+                self.joker.get_intel_context(),
+                self.get_macro_context(),
+            ]
+
+            # Execute all intel gathering in parallel to avoid sequential LLM bottlenecks
+            crypto_alpha, yt_intel, macro_str = await asyncio.gather(
+                *intelligence_tasks
+            )
 
             p_config = await self.get_agent_config("punisher")
 
             # 2. VETERAN CONTEXT
-            context_str = f"{crypto_alpha}\n\n--- MEDIA INTEL ---\n{yt_intel}\n"
-
-            # Add Macro
-            try:
-                from punisher.crypto.bitcoin import BitcoinData
-
-                price = await BitcoinData.get_price()
-                context_str += (
-                    f"\n--- MACRO ---\nBTC: ${price.get('price_usd', 0):,.2f}\n"
-                )
-            except:
-                pass
+            context_str = (
+                f"{crypto_alpha}\n\n--- MEDIA INTEL ---\n{yt_intel}\n{macro_str}"
+            )
 
             # 3. DELEGATION & TASK LOGGING
             if any(k in content.lower() for k in ["scrape", "wallets", "discover"]):
@@ -147,15 +152,53 @@ class AgentOrchestrator:
             )
 
             # 5. BROADCAST
-            target_out = f"punisher:{source}:out"
-            self.queue.push(target_out, response_text)
+            if source.startswith("telegram:"):
+                chat_id = source.split(":")[1]
+                self.queue.push(
+                    "punisher:telegram:out",
+                    json.dumps({"chat_id": int(chat_id), "content": response_text}),
+                )
+            else:
+                # Map TUI to CLI output as they share the broadcast stream
+                out_id = "cli" if source == "tui" else source
+                target_out = f"punisher:{out_id}:out"
+                self.queue.push(target_out, response_text)
 
         except Exception as e:
             logger.error(f"Process error: {e}", exc_info=True)
             if source:
-                self.queue.push(
-                    f"punisher:{source}:out", f"Operational Failure: {str(e)}"
-                )
+                if source.startswith("telegram:"):
+                    chat_id = source.split(":")[1]
+                    self.queue.push(
+                        "punisher:telegram:out",
+                        json.dumps(
+                            {
+                                "chat_id": int(chat_id),
+                                "content": f"Operational Failure: {str(e)}",
+                            }
+                        ),
+                    )
+                else:
+                    self.queue.push(
+                        f"punisher:{source}:out", f"Operational Failure: {str(e)}"
+                    )
+
+    async def get_macro_context(self) -> str:
+        """Fetch real-time macro data, prioritizing live HL stream"""
+        try:
+            # 1. Try Live Stream from Satoshi
+            price = await self.satoshi.get_live_btc_price()
+            if price > 0:
+                return f"\n--- MACRO (LIVE HL FEED) ---\nBTC: ${price:,.2f}\n"
+
+            # 2. Fallback to external API
+            from punisher.crypto.bitcoin import BitcoinData
+
+            api_data = await BitcoinData.get_price()
+            return f"\n--- MACRO (API FALLBACK) ---\nBTC: ${api_data.get('price_usd', 0):,.2f}\n"
+        except Exception as e:
+            logger.error(f"Macro yield error: {e}")
+            return "\n--- MACRO ---\nData Unavailable\n"
 
     def stop(self):
         self.running = False
