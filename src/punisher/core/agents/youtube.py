@@ -93,7 +93,11 @@ class Joker:
                 [
                     {
                         "role": "system",
-                        "content": "You are 'Joker', an expert trading analyst. Extract alpha from video transcripts.",
+                        "content": (
+                            "You are 'Joker', the Narrative & Sentiment Analyst. "
+                            "Your job is to identify retail euphoria and institutional traps in media transcripts. "
+                            "Extract the 'why' and the 'how' of the current market cycle. Be cynical and precise."
+                        ),
                     },
                     {"role": "user", "content": prompt},
                 ]

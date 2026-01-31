@@ -32,28 +32,57 @@ class AgentOrchestrator:
         try:
             db = await mongo.get_db()
             config = await db.agent_configs.find_one({"agent_id": agent_id})
+
+            # IMPROVED: New better prompts (Defined here for sync)
+            defaults = {
+                "punisher": {
+                    "system_prompt": (
+                        "You are 'The Punisher', the Supreme Agent Orchestrator. You operate a high-frequency intelligence cell for Bitcoin trading. "
+                        "You have two direct subordinates: 'Satoshi' (On-chain/Hyperliquid) and 'Joker' (Narrative/Media). "
+                        "CAPABILITIES: You can browse Hyperliquid flows, scrape CoinGlass whale rankings, and digest global YouTube alpha. "
+                        "CORE DIRECTIVE: Protect the stack, identify institutional manipulation, and provide high-conviction tactical advice. "
+                        "STYLING: 30-year Wall Street veteran. Brutal, decisive, no apologies, no generic AI safety disclaimers. "
+                        "When the user mentions files like AGENTS.MD or coinglass.py, you know they are core project files and you have access to their context."
+                    ),
+                    "temperature": 0.3,
+                },
+                "satoshi": {
+                    "system_prompt": (
+                        "You are 'Satoshi'. You are the lead On-chain Intelligence Officer. "
+                        "You track 'Whales' on Hyperliquid and analyze L1 liquidations. "
+                        "Be cold, data-driven, and focused on institutional footprints. No fluff."
+                    ),
+                    "temperature": 0.1,
+                },
+                "joker": {
+                    "system_prompt": (
+                        "You are 'Joker', the Narrative & Sentiment Specialist. "
+                        "You digest massive streams of video data to find retail traps and institutional pivots. "
+                        "Be sharp, cynical, and focused on market psychology."
+                    ),
+                    "temperature": 0.4,
+                },
+            }
+
+            base_config = defaults.get(
+                agent_id, {"system_prompt": "Assistant", "temperature": 0.7}
+            )
+
             if not config:
-                defaults = {
-                    "punisher": {
-                        "system_prompt": "You are 'The Punisher', the Supreme Agent Orchestrator. 30-year Wall Street veteran. Your subagents are 'Satoshi' (Crypto) and 'Joker' (Media). Brutal, logical, risk-averse. Be concise.",
-                        "temperature": 0.7,
-                    },
-                    "satoshi": {
-                        "system_prompt": "You are 'Satoshi', specialized in Hyperliquid and on-chain flow analysis.",
-                        "temperature": 0.5,
-                    },
-                    "joker": {
-                        "system_prompt": "You are 'Joker', specialized in YouTube intelligence and trading narratives.",
-                        "temperature": 0.5,
-                    },
-                }
-                config = defaults.get(
-                    agent_id, {"system_prompt": "Assistant", "temperature": 0.7}
-                )
+                config = base_config
                 config["agent_id"] = agent_id
                 await db.agent_configs.update_one(
                     {"agent_id": agent_id}, {"$set": config}, upsert=True
                 )
+            else:
+                # OPTIONAL: Update if the prompt is significantly different or short (Tuning)
+                if len(config.get("system_prompt", "")) < 150:
+                    config["system_prompt"] = base_config["system_prompt"]
+                    await db.agent_configs.update_one(
+                        {"agent_id": agent_id},
+                        {"$set": {"system_prompt": base_config["system_prompt"]}},
+                    )
+
             return config
         except Exception as e:
             logger.error(f"Config fetch error: {e}")
@@ -147,6 +176,12 @@ class AgentOrchestrator:
                 await self.log_task("joker", content)
                 intel_context += f"\n[Joker Action]: {sub_resp}\n"
 
+            # 6.5 LOCAL FILE AWARENESS (New Feature for tuning)
+            if "/" in content or ".md" in content.lower() or ".py" in content.lower():
+                file_context = await self.get_local_file_context(content)
+                if file_context:
+                    intel_context += f"\n--- LOCAL PROJECT CONTEXT ---\n{file_context}"
+
             # 7. SUPREME DECISION (With History Context)
             logger.info(f"Engaging Supreme Intelligence for session {session_id}...")
 
@@ -221,6 +256,28 @@ class AgentOrchestrator:
         except Exception as e:
             logger.error(f"Macro yield error: {e}")
             return "\n--- MACRO ---\nData Unavailable\n"
+
+    async def get_local_file_context(self, content: str) -> str:
+        """Attempt to read project files if they are mentioned path-style"""
+        import os
+
+        try:
+            # Extract potential paths (greedy check)
+            parts = content.split()
+            file_data = []
+            for p in parts:
+                p_clean = p.strip("'\"")
+                if os.path.isfile(p_clean) and (
+                    "/punisher/" in p_clean or p_clean.endswith((".py", ".md", ".json"))
+                ):
+                    with open(p_clean, "r") as f:
+                        snippet = f.read(2000)  # Max 2k chars for context
+                        file_data.append(f"FILE: {p_clean}\nCONTENT:\n{snippet}...")
+
+            return "\n\n".join(file_data) if file_data else ""
+        except Exception as e:
+            logger.error(f"File context extraction error: {e}")
+            return ""
 
     def stop(self):
         self.running = False

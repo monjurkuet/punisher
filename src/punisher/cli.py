@@ -1,11 +1,8 @@
 import click
-import json
-from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from punisher.bus.queue import MessageQueue
-from punisher.config import settings
 import sys
 
 console = Console()
@@ -33,13 +30,34 @@ def send(message):
 @main.command()
 def chat():
     """Continuous Chat Mode with Punisher Agent"""
+    # Silence all system logs during chat to keep the UI clean
+    import logging
+
+    # Disable propagation to root and set levels
+    for name in logging.root.manager.loggerDict:
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.WARNING)
+        logger.propagate = False
+        # Remove existing handlers
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+
+    logging.root.setLevel(logging.WARNING)
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     console.print(
-        "[bold green]Punisher Continuous Chat[/bold green] (Type 'exit' to quit)"
+        Panel(
+            "[bold green]Punisher Direct Chat[/bold green]\n[dim]System logs disabled. Type 'exit' to quit.[/dim]",
+            border_style="green",
+        )
     )
 
-    from punisher.bus.queue import MessageQueue
+    import asyncio
+    from punisher.llm.gateway import LLMGateway
 
-    queue = MessageQueue()
+    gateway = LLMGateway()
+    conversation_history = []
 
     while True:
         try:
@@ -47,30 +65,24 @@ def chat():
             if user_input.lower() in ["exit", "quit"]:
                 break
 
-            # Send to Orchestrator
-            msg = {
-                "source": "cli_chat",
-                "content": user_input,
-                "timestamp": datetime.now().isoformat(),
-            }
-            queue.push("punisher:inbox", json.dumps(msg))
+            # Add user message to history
+            conversation_history.append({"role": "user", "content": user_input})
 
-            # Wait for response (simplified sync wait for MVP)
-            # In a real event-driven system, we'd listen effectively.
-            # Here we just block-wait on a specific return channel.
-
+            # Get response from LLM
             with console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
-                # Poll for response
-                tries = 0
-                while tries < 30:  # 30s timeout
-                    resp = queue.pop("punisher:cli_chat:out")
-                    if resp:
-                        console.print(f"[bold red]Punisher:[/bold red] {resp}")
-                        break
-                    import time
+                try:
+                    response = asyncio.run(gateway.chat(conversation_history))
 
-                    time.sleep(0.5)
-                    tries += 1
+                    # Add assistant response to history
+                    conversation_history.append(
+                        {"role": "assistant", "content": response}
+                    )
+
+                    console.print(f"[bold red]Punisher:[/bold red] {response}")
+                except Exception as e:
+                    console.print(
+                        f"[bold red]Punisher:[/bold red] [LLM Error] {str(e)}"
+                    )
 
         except KeyboardInterrupt:
             break
@@ -100,7 +112,6 @@ def run():
     queue = MessageQueue()
 
     import threading
-    import time
 
     def listener():
         while True:
