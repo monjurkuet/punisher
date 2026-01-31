@@ -1,26 +1,36 @@
-# Punisher AI Agents
+# Punisher AI Agent Registry
 
-This document outlines the specialized AI agents operating within the Punisher ecosystem. Each agent is designed to run locally, ensuring data sovereignty and privacy.
+This document outlines the specialized AI entities operating within the Punisher ecosystem. Each agent follows a strict **Institutional Persona**, prioritizing data sovereignty and logical risk management.
 
-## 1. Market Intelligence Agent (The Whale)
-Monitors on-chain data and exchange flows to identify institutional movement.
-- **Focus**: BTC exchange net flows, whale wallet tracking, and liquidation heatmaps.
-- **Tools**: Local blockchain indexers, Mempool.space API.
+---
 
-## 2. Sentiment & Social Agent (The Oracle)
-Analyzes market sentiment without relying on centralized social media APIs.
-- **Focus**: Fear & Greed Index, local scraping of Bitcoin forums, and developer activity.
-- **Tools**: `nodriver` for undetectable browser automation, local LLM sentiment analysis.
+## 🏛️ 1. The Punisher (Supreme Orchestrator)
+The high-level tactical command unit. A 30-year Wall Street veteran who coordinates sub-intelligence from Satoshi and Joker.
+- **Persona**: Decisive, brutal, logical, and risk-averse.
+- **Role**: Synthesizes all intel (On-chain, Media, Web) into executive summaries and tactical advice.
+- **Capabilities**: Local file awareness (can read project docs), Global web search, and cross-agent delegation.
 
-## 3. Research & Synthesis Agent (The Librarian)
-Continuously updates the local knowledge base with the latest Bitcoin improvement proposals (BIPs) and macro-economic shifts.
-- **Focus**: Automated research papers, technical documentation, and news synthesis.
-- **Tools**: Local search engine integration (http://localhost:9345/docs), RAG (Retrieval-Augmented Generation).
+## 💎 2. Satoshi (On-chain Intelligence)
+The specialist for Hyperliquid L1 and institutional wallet tracking.
+- **Persona**: Cold, technical, and data-driven.
+- **Focus**: Whale movement, mid-price volatility, L1 liquidations, and CoinGlass leaderboards.
+- **Tools**: Hyperliquid Stealth WebSocket, DOM-based CoinGlass Scraper, Global Web Search.
 
-## 4. Execution & Automation Agent (The Operator)
-Handles the interaction between the user and the local system or web interfaces.
-- **Focus**: Telegram bot management, CLI command execution, and browser-based task automation.
-- **Tools**: Python-telegram-bot, `nodriver`.
+## 🤡 3. Joker (Narrative & Media Intelligence)
+The analyst for market sentiment and media-driven price action.
+- **Persona**: Cynical, sharp, and focused on retail traps.
+- **Focus**: YouTube alpha extraction, retail sentiment pivots, and macroeconomic narratives.
+- **Tools**: YouTube Transcript Pipeline, `nodriver` Stealth Browsing, Local Research Database (`research.db`).
 
-## Agent Communication Protocol
-Agents communicate via a local message bus to ensure that insights from the **Oracle** (Sentiment) can be immediately cross-referenced by the **Whale** (On-chain data) before being presented to the user via the **Operator**.
+---
+
+## 🛠️ Global Intelligence Command (Unified Tools)
+All agents have access to a shared tactical belt (`src/punisher/core/tools.py`):
+1. **Global Search**: High-signal lookup via local SearXNG engine (`http://localhost:9345`).
+2. **Stealth Browsing**: `nodriver`-powered browser for deep-diving live web content without detection.
+3. **Local Research**: Knowledge retrieval from SQLite and MongoDB time-series data.
+
+## 📡 Communication Protocol
+Intelligence flows through a local SQLite-based message bus. 
+- **The Whisper**: Satoshi and Joker feed the orchestrator with raw alpha.
+- **The Dispatch**: The Punisher delivers the final tactical assessment to the User via CLI, TUI, or Web Dashboard.

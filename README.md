@@ -1,82 +1,85 @@
 # Punisher - Stealth Bitcoin Market Intelligence AI
 
-The **Punisher** is a sophisticated, privacy-first AI trading assistant designed for institutional-grade Bitcoin market analysis. It operates entirely locally on Ubuntu bare metal, leveraging advanced stealth techniques to monitor markets and wallets without detection.
+The **Punisher** is a sophisticated, privacy-first AI intelligence cell designed for institutional-grade Bitcoin market analysis. It operates entirely locally on Ubuntu bare metal, leveraging advanced stealth techniques to monitor markets, whales, and media narratives without detection.
+
+---
 
 ## 🚀 Key Features
 
-### 🐳 Stealth Hyperliquid Monitoring
-- **Undetectable WebSocket Connection**: Mimics legitimate Chrome TLS fingerprints and headers to bypass bot detection.
-- **Wallet Stalking**: Tracks specific whale wallets using `webData2` subscriptions.
-- **Market Sentinel**: Polls L2 order books and recent trades via HTTP/2 for global market sentiment.
-- **Data Persistence**: Stores wallet snapshots, positions, and whale trades in MongoDB.
-- **CoinGlass Scraper**: Automated scraper to discover top trader wallets from leaderboards.
+### 🐳 Global Market Intelligence
+- **Stealth Hyperliquid Monitoring**: Undetectable WebSocket connection mimicking legitimate Chrome fingerprints to monitor whales and L1 flows.
+- **CoinGlass Discovery**: `nodriver`-powered DOM scraper that discovers top traders from exchange leaderboards.
+- **Web Intelligence Link**: Fully integrated with a local SearXNG engine (`http://localhost:9345`) for real-time news and technical lookup.
+- **Stealth Browsing**: Agents use `nodriver` to browse and digest the live web without being flagged as bots.
 
-### 🧠 Institutional Persona
-- **Wall Street Veteran**: The AI acts as a 30-year risk manager—cynical, logical, and anti-FOMO.
-- **Context-Aware**: Injects live BTC price, saved research metrics, and real-time news into every response.
+### 🧠 Triple-Agent Architecture
+- **The Punisher**: Supreme Orchestrator (Wall Street Veteran Persona).
+- **Satoshi**: On-chain & Flow specialist (Cold, Data-driven).
+- **Joker**: Narrative & Media specialist (Cynical, Sentiment-focused).
+- *See [AGENTS.MD](./AGENTS.MD) for full specs.*
 
-### 🔒 Privacy & Architecture
-- **100% Local**: No external cloud dependnecies; runs on your hardware.
-- **Modern Stack**: Built with `Python 3.12+`, `uv`, `FastAPI`, `Playwright`, and `MongoDB`.
-- **Hybrid Storage**: SQLite for quick lookups, MongoDB for high-volume time-series data.
+### 🖥️ Unified Mission Control
+- **Web Dashboard**: A premium, React-based UI with a dedicated "Live Intel Feed" and ChatGPT-style chat interface.
+- **Direct CLI Chat**: High-speed, responsive chat via `uv run punisher chat` with aggressive log suppression for a pure tactical experience.
+- **Real-time Telemetry**: Monitor mission status with `uv run punisher listen`.
 
-## 🛠️ Installation
+---
 
-1. **Prerequisites**
-   - Ubuntu 22.04+ / Linux
-   - Python 3.12+
-   - `uv` package manager
-   - MongoDB Cluster (Atlas or Local)
+## 🛠️ Stack & Installation
 
-2. **Setup**
+- **Backend**: Python 3.12, FastAPI, `uv`, Playwright/nodriver.
+- **Frontend**: Vite, React, Tailwind, AlpineJS.
+- **Databases**: MongoDB (Time-series data), SQLite (Message Queue & Knowledge Base).
+- **Intelligence**: Local SearXNG engine.
+
+### Setup
+1. **Clone & Sync**:
    ```bash
    git clone git@github.com:monjurkuet/punisher.git
    cd punisher
    uv sync
    ```
-
-3. **Configuration**
-   Copy `.env.template` to `.env` and fill in your credentials:
+2. **Environment**:
    ```bash
-   cp .env.template .env
+   cp .env.template .env # Fill in keys
    ```
-   Required keys:
-   - `OPENAI_API_KEY` (for LLM Gateway)
-   - `MONGODB_URI` (for wallet/market data)
-   - `TELEGRAM_BOT_TOKEN` (optional)
+
+---
 
 ## ⚡ Usage
 
-### Start the Core Server
-This launches the Orchestrator, WebSocket monitors, and API.
+### 1. Launch the Mission Control
+Starts the Orchestrator and all monitoring subsystems.
 ```bash
-uv run punisher-server
+uv run python src/punisher/server.py
 ```
 
-### Access the CLI
-Chat with the AI and view real-time alerts.
+### 2. Enter Direct Chat (Terminal)
+Pure chat mode with system logs hidden.
 ```bash
-uv run punisher
+uv run punisher chat
 ```
 
-### Scrape Wallets
-Update the tracked wallet list from CoinGlass.
+### 3. Monitor Live Telemetry
+View raw hyperliquid feeds and agent logs in real-time.
 ```bash
-uv run python src/punisher/scrapers/coinglass.py
+uv run punisher listen
 ```
+
+### 4. Open Web Dashboard
+Accessible at `http://localhost:3000/`.
+
+---
 
 ## 📂 Project Structure
-- `src/punisher/core`: Orchestrator and main event loop.
-- `src/punisher/crypto`: Hyperliquid WebSocket/HTTP monitors & Stealth logic.
-- `src/punisher/scrapers`: CoinGlass and other web scrapers.
-- `src/punisher/db`: MongoDB and SQLite interfaces.
-- `src/punisher/llm`: Gateway to LLM providers.
+- `src/punisher/core`: The Orchestrator, Agent Tools, and Subagents.
+- `src/punisher/crypto`: Hyperliquid WebSocket/HTTP stealth monitors.
+- `src/punisher/scrapers`: CoinGlass and high-level web extraction.
+- `src/punisher/research`: YouTube pipeline and local knowledge base.
+- `punisher-web`: React-based dashboard source.
 
 ## 🤝 Contributing
-Commits should use [Conventional Commits](https://www.conventionalcommits.org/).
-- `feat`: New capabilities
-- `fix`: Bug fixes
-- `refactor`: Code restructuring
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## 📜 License
 MIT
