@@ -10,12 +10,8 @@ from punisher.config import settings
 
 logger = logging.getLogger("punisher.db.mongo")
 
-# Default MongoDB URI (can be overridden via settings)
-MONGO_URI = getattr(
-    settings,
-    "MONGODB_URI",
-    "mongodb+srv://muhammadmanjur_db_user:%23*7dU4QAbX%40%23!%26*@cluster0.hhgeyuv.mongodb.net/",
-)
+# MongoDB URI from settings
+MONGO_URI = settings.MONGODB_URI
 DATABASE_NAME = "punisher"
 
 

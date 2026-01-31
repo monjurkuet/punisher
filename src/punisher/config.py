@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Crypto
     HYPERLIQUID_WALLET_ADDRESS: str = ""
+    MONGODB_URI: str = "mongodb://localhost:27017"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
