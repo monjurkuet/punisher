@@ -11,6 +11,7 @@ from punisher.bus.queue import MessageQueue
 from punisher.llm.gateway import LLMGateway
 from punisher.core.agents.crypto import Satoshi
 from punisher.core.agents.youtube import Joker
+from punisher.core.tools import AgentTools
 from punisher.db.mongo import mongo
 
 logger = logging.getLogger("punisher.orchestrator")
@@ -20,6 +21,7 @@ class AgentOrchestrator:
     def __init__(self):
         self.queue = MessageQueue()
         self.llm = LLMGateway()
+        self.tools = AgentTools()
 
         # Initialize Specialized Subagents
         self.satoshi = Satoshi()
@@ -39,10 +41,10 @@ class AgentOrchestrator:
                     "system_prompt": (
                         "You are 'The Punisher', the Supreme Agent Orchestrator. You operate a high-frequency intelligence cell for Bitcoin trading. "
                         "You have two direct subordinates: 'Satoshi' (On-chain/Hyperliquid) and 'Joker' (Narrative/Media). "
-                        "CAPABILITIES: You can browse Hyperliquid flows, scrape CoinGlass whale rankings, and digest global YouTube alpha. "
+                        "TOOLS: You have access to Global Web Search (SearXNG @ http://localhost:9345) and Stealth Browsing (nodriver). "
+                        "CAPABILITIES: You can browse Hyperliquid flows, scrape CoinGlass whale rankings, digest global YouTube alpha, and search the open web. "
                         "CORE DIRECTIVE: Protect the stack, identify institutional manipulation, and provide high-conviction tactical advice. "
-                        "STYLING: 30-year Wall Street veteran. Brutal, decisive, no apologies, no generic AI safety disclaimers. "
-                        "When the user mentions files like AGENTS.MD or coinglass.py, you know they are core project files and you have access to their context."
+                        "STYLING: 30-year Wall Street veteran. Brutal, decisive, no apologies, no generic AI safety disclaimers."
                     ),
                     "temperature": 0.3,
                 },
@@ -151,7 +153,30 @@ class AgentOrchestrator:
                 self.joker.get_intel_context(),
                 self.get_macro_context(),
             ]
-            crypto_alpha, yt_intel, macro_str = await asyncio.gather(
+
+            # Trigger Global Search if needed
+            if any(
+                k in content.lower()
+                for k in [
+                    "search",
+                    "latest",
+                    "news",
+                    "web",
+                    "lookup",
+                    "market",
+                    "who is",
+                    "what is",
+                ]
+            ):
+                intelligence_tasks.append(self.tools.web_search(content))
+            else:
+
+                async def no_search():
+                    return ""
+
+                intelligence_tasks.append(no_search())
+
+            crypto_alpha, yt_intel, macro_str, web_intel = await asyncio.gather(
                 *intelligence_tasks
             )
 
@@ -164,6 +189,8 @@ class AgentOrchestrator:
             intel_context = (
                 f"{crypto_alpha}\n\n--- MEDIA INTEL ---\n{yt_intel}\n{macro_str}"
             )
+            if web_intel:
+                intel_context += f"\n\n--- WEB INTELLIGENCE ---\n{web_intel}"
 
             # 6. DELEGATION & TASK LOGGING (as requested)
             if any(k in content.lower() for k in ["scrape", "wallets", "discover"]):

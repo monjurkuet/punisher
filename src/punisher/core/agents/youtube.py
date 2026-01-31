@@ -9,6 +9,7 @@ import sqlite3
 from punisher.bus.queue import MessageQueue
 from punisher.research.youtube import YouTubeMonitor
 from punisher.llm.gateway import LLMGateway
+from punisher.core.tools import AgentTools
 
 logger = logging.getLogger("punisher.agents.youtube")
 
@@ -18,6 +19,7 @@ class Joker:
         self.queue = MessageQueue()
         self.monitor = YouTubeMonitor()
         self.llm = LLMGateway()
+        self.tools = AgentTools()
         self.running = False
         # Specific high-signal channels to watch
         self.watchlist = ["ChartChampions", "ECKrown", "Glassnode"]

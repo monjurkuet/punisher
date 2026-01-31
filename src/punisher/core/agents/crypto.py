@@ -9,6 +9,7 @@ from punisher.bus.queue import MessageQueue
 from punisher.crypto.hyperliquid import HyperliquidMonitor
 from punisher.scrapers.coinglass import CoinGlassScraper
 from punisher.llm.gateway import LLMGateway
+from punisher.core.tools import AgentTools
 
 logger = logging.getLogger("punisher.agents.crypto")
 
@@ -19,6 +20,7 @@ class Satoshi:
         self.hl_monitor = HyperliquidMonitor()
         self.cg_scraper = CoinGlassScraper()
         self.llm = LLMGateway()
+        self.tools = AgentTools()
         self.running = False
 
     async def start(self):

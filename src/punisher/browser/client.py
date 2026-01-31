@@ -44,26 +44,32 @@ class BrowserClient:
 
             # Extract titles and snippets
             results = await page.evaluate("""() => {
-                // Try multiple common selectors for DDG results
-                let items = document.querySelectorAll('article');
-                if (items.length === 0) {
-                     // Fallback: Just return the body text if we can't find structured results
-                     const bodyText = document.body.innerText.split('\\n').filter(line => line.trim().length > 50).slice(0, 5).join('\\n');
-                     if (bodyText) {
-                        return `FALLBACK TEXT CONTENT (Selectors failed):\n${bodyText}`;
-                     }
-                     return "";
-                }
+                const results = [];
+                // 1. Try DuckDuckGo primary selectors
+                const items = document.querySelectorAll('article, .result, .links_main');
                 
-                return Array.from(items).slice(0, 3).map(item => {
-                    const titleElement = item.querySelector('h2 a') || item.querySelector('.result__a');
-                    const snippetElement = item.querySelector('[class*="snippet"]') || item.querySelector('.result__snippet');
+                items.forEach(item => {
+                    const titleEl = item.querySelector('h2, .result__title, a.result__a');
+                    const snippetEl = item.querySelector('.result__snippet, [data-testid="result-snippet"]');
                     
-                    const title = titleElement ? titleElement.innerText : 'No Title';
-                    const snippet = snippetElement ? snippetElement.innerText : 'No Snippet';
-                    
-                    return `TITLE: ${title}\nSNIPPET: ${snippet}\n---\n`;
-                }).join('\\n');
+                    if (titleEl && titleEl.innerText.trim()) {
+                        results.push(`TITLE: ${titleEl.innerText.trim()}\nSNIPPET: ${snippetEl ? snippetEl.innerText.trim() : "No snippet"}\n---`);
+                    }
+                });
+
+                if (results.length > 0) return results.slice(0, 5).join('\\n');
+
+                // 2. Fallback: Extract meaningful paragraph text
+                const paragraphs = Array.from(document.querySelectorAll('p, span'))
+                    .map(p => p.innerText.trim())
+                    .filter(t => t.length > 60)
+                    .slice(0, 5);
+                
+                if (paragraphs.length > 0) {
+                    return "FALLBACK CONTEXT:\\n" + paragraphs.join('\\n');
+                }
+
+                return "No structured results found.";
             }""")
 
             await page.close()
