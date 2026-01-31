@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 
@@ -10,17 +11,22 @@ const SettingsIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill=
 
 interface Message {
   id: string;
-  role: 'user' | 'model';
+  role: 'user' | 'assistant' | 'model'; // assistant and model treat the same in UI
   content: string;
-  timestamp: string;
+  timestamp?: string;
 }
 
 interface RunConfig {
-  model: string;
+  agent_id: string;
+  system_prompt: string;
   temperature: number;
-  topP: number;
-  topK: number;
-  systemInstruction: string;
+}
+
+interface AgentTask {
+  agent: string;
+  task: string;
+  status: string;
+  timestamp: string;
 }
 
 function App() {
@@ -28,19 +34,50 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingStep, setThinkingStep] = useState('');
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId] = useState(() => "web-session-1"); // Use a consistent session for now
 
   const [config, setConfig] = useState<RunConfig>({
-    model: 'vision-model_QWEN',
-    temperature: 0.7,
-    topP: 0.9,
-    topK: 40,
-    systemInstruction: 'You are the Punisher Mission Control. Provide strategic tactical advice, intel analysis, and mission planning. Be precise, gritty, and direct.'
+    agent_id: 'punisher',
+    system_prompt: "You are 'The Punisher', the Supreme Agent Orchestrator. 30-year Wall Street veteran. Brutal, logical, risk-averse.",
+    temperature: 0.7
   });
+
+  const [missionTasks, setMissionTasks] = useState<AgentTask[]>([]);
   const [intelFeed, setIntelFeed] = useState<string[]>(['Satellite link established...']);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize Data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. Fetch Chat History
+        const histResp = await fetch(`/api/chat/history?session_id=${sessionId}`);
+        const history = await histResp.json();
+        setMessages(history.map((m: any, i: number) => ({
+          id: `hist-${i}`,
+          role: m.role,
+          content: m.content
+        })));
+
+        // 2. Fetch Mission History (Tasks)
+        const taskResp = await fetch('/api/agents/tasks');
+        const tasks = await taskResp.json();
+        setMissionTasks(tasks);
+
+        // 3. Fetch Configuration
+        const confResp = await fetch('/api/agents/config');
+        const configs = await confResp.json();
+        const pConfig = configs.find((c: any) => c.agent_id === 'punisher');
+        if (pConfig) setConfig(pConfig);
+
+      } catch (err) {
+        console.error("Failed to initialize dashboard data:", err);
+      }
+    };
+    fetchData();
+  }, [sessionId]);
 
   // SSE handler
   useEffect(() => {
@@ -49,14 +86,21 @@ function App() {
       try {
         const data = JSON.parse(event.data);
         const contentStr = typeof data.content === 'string' ? data.content : JSON.stringify(data.content, null, 2);
-        const isFeed = contentStr.includes('[POS]') || contentStr.includes('[WALLET]') || contentStr.includes('[TRADE]');
 
+        // Check for intelligence feed markers
+        if (contentStr.includes('[POS]') || contentStr.includes('[WALLET]') || contentStr.includes('[TRADE]') || contentStr.includes('BTC:')) {
+          setIntelFeed(prev => [contentStr.replace(/\[POS\]|\[WALLET\]|\[TRADE\]/g, '').trim(), ...prev.slice(0, 50)]);
+          return;
+        }
+
+        // Check for Thinking State
         if (contentStr.includes('PUNISHER IS THINKING')) {
           setIsLoading(true);
           setThinkingStep(contentStr.replace('PUNISHER IS THINKING... ', '').replace('[', '').replace(']', ''));
           return;
         }
 
+        // Normal Response
         const newMessage: Message = {
           id: Date.now().toString() + Math.random(),
           role: data.type === 'response' ? 'model' : 'model',
@@ -64,15 +108,15 @@ function App() {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
-        if (isFeed) {
-          setIntelFeed(prev => [contentStr.replace(/\[POS\]|\[WALLET\]|\[TRADE\]/g, '').trim(), ...prev.slice(0, 50)]);
-        } else {
-          if (data.type === 'response') {
-            setIsLoading(false);
-            setThinkingStep('');
-          }
-          setMessages(prev => [...prev, newMessage]);
+        if (data.type === 'response') {
+          setIsLoading(false);
+          setThinkingStep('');
         }
+        setMessages(prev => [...prev, newMessage]);
+
+        // Refresh tasks when a response is received
+        fetch('/api/agents/tasks').then(r => r.json()).then(setMissionTasks);
+
       } catch (e) {
         console.error(e);
       }
@@ -119,6 +163,19 @@ function App() {
     }
   };
 
+  const saveConfig = async (newConfig: RunConfig) => {
+    setConfig(newConfig);
+    try {
+      await fetch('/api/agents/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig)
+      });
+    } catch (err) {
+      console.error("Failed to save config:", err);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       handleSendMessage();
@@ -148,15 +205,27 @@ function App() {
               <span>Mission History</span>
             </div>
             <div className="history-list">
-              <div className="history-item active">Current Operation</div>
-              <div className="history-item">Op: Cerberus</div>
-              <div className="history-item">Intel Sweep 09-B</div>
-              <div className="history-item">Target Log #442</div>
+              <div className={`history-item ${missionTasks.length === 0 ? 'active' : ''}`}>Current Operation</div>
+              {missionTasks.map((t, i) => (
+                <div key={i} className="history-item">
+                  <div className="flex justify-between items-center opacity-70 mb-1">
+                    <span className="text-[10px] uppercase font-bold text-blue-400">{t.agent}</span>
+                    <span className="text-[10px]">{new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="truncate text-zinc-300">{t.task}</div>
+                </div>
+              ))}
+              {missionTasks.length === 0 && (
+                <>
+                  <div className="history-item">Op: Cerberus</div>
+                  <div className="history-item">Intel Sweep 09-B</div>
+                </>
+              )}
             </div>
           </div>
         </aside>
 
-        <main className="central-canvas no-scrollbar">
+        <main className="central-canvas">
           <div className="canvas-container">
             <div className="message-area" ref={scrollRef}>
               {messages.length === 0 && !isLoading && (
@@ -170,7 +239,7 @@ function App() {
                 <div key={msg.id} className={`message-row ${msg.role}`}>
                   <div className="message-header">
                     <span className="role-label">{msg.role === 'user' ? 'USER' : 'PUNISHER'}</span>
-                    <span className="timestamp">{msg.timestamp}</span>
+                    {msg.timestamp && <span className="timestamp">{msg.timestamp}</span>}
                   </div>
                   <div className="message-body">
                     {msg.content}
@@ -190,36 +259,36 @@ function App() {
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="prompt-anchor">
-              <div className="prompt-card">
-                <textarea
-                  ref={inputRef}
-                  placeholder="Insert tactical request..."
-                  value={inputValue}
-                  onChange={(e) => {
-                    setInputValue(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={handleKeyDown}
-                />
-                <div className="prompt-actions">
-                  <div className="action-group">
-                    <button className="icon-btn" title="Attach Files"><AttachIcon /></button>
-                    <button className="icon-btn" title="Mission Tools"><ToolsIcon /></button>
-                    <button className="pill-btn"><SearchIcon /> Search Intel</button>
-                  </div>
-                  <button
-                    className={`run-btn ${(!inputValue.trim() || isLoading) ? 'disabled' : ''}`}
-                    onClick={handleSendMessage}
-                  >
-                    RUN MISSION
-                  </button>
+          <div className="prompt-anchor">
+            <div className="prompt-card">
+              <textarea
+                ref={inputRef}
+                placeholder="Insert tactical request..."
+                value={inputValue}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                }}
+                onKeyDown={handleKeyDown}
+              />
+              <div className="prompt-actions">
+                <div className="action-group">
+                  <button className="icon-btn" title="Attach Files"><AttachIcon /></button>
+                  <button className="icon-btn" title="Mission Tools"><ToolsIcon /></button>
+                  <button className="pill-btn"><SearchIcon /> Search Intel</button>
                 </div>
+                <button
+                  className={`run-btn ${(!inputValue.trim() || isLoading) ? 'disabled' : ''}`}
+                  onClick={handleSendMessage}
+                >
+                  RUN MISSION
+                </button>
               </div>
-              <div className="keyboard-hint">Ctrl + Enter to dispatch</div>
             </div>
+            <div className="keyboard-hint">Ctrl + Enter to dispatch</div>
           </div>
         </main>
 
@@ -233,12 +302,10 @@ function App() {
             <div className="setting-group">
               <label>Model</label>
               <select
-                value={config.model}
-                onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                value={config.agent_id}
+                disabled
               >
-                <option value="vision-model_QWEN">vision-model_QWEN</option>
-                <option value="gemini-3-pro">Gemini 3 Pro</option>
-                <option value="strategic">Strategic Visualization</option>
+                <option value="punisher">The Punisher (Supreme)</option>
               </select>
             </div>
 
@@ -246,8 +313,8 @@ function App() {
               <label>System Instructions</label>
               <textarea
                 className="system-text"
-                value={config.systemInstruction}
-                onChange={(e) => setConfig({ ...config, systemInstruction: e.target.value })}
+                value={config.system_prompt}
+                onChange={(e) => saveConfig({ ...config, system_prompt: e.target.value })}
               />
             </div>
 
@@ -259,19 +326,7 @@ function App() {
               <input
                 type="range" min="0" max="1" step="0.1"
                 value={config.temperature}
-                onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
-              />
-            </div>
-
-            <div className="setting-group">
-              <div className="slider-header">
-                <label>Top P</label>
-                <span>{config.topP}</span>
-              </div>
-              <input
-                type="range" min="0" max="1" step="0.05"
-                value={config.topP}
-                onChange={(e) => setConfig({ ...config, topP: parseFloat(e.target.value) })}
+                onChange={(e) => saveConfig({ ...config, temperature: parseFloat(e.target.value) })}
               />
             </div>
 

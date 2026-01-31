@@ -37,13 +37,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Punisher", lifespan=lifespan)
 
-# Serve Frontend
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*"
+    ],  # For development, allowing all. Better to use localhost:3000 and 3001
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve Frontend (Disabled - Use Vite on port 3000/3001 for dev)
+# app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 
 @app.get("/")
 async def read_root():
-    return FileResponse("frontend/index.html")
+    return {"status": "Punisher API Online", "docs": "/docs"}
 
 
 # --- Agent Management API ---
@@ -88,6 +100,12 @@ async def get_tasks(agent: str = None):
         .to_list(length=50)
     )
     return tasks
+
+
+@app.get("/api/chat/history")
+async def get_chat_history(session_id: str = "default"):
+    history = await mongo.get_chat_history(session_id, limit=50)
+    return history
 
 
 # --- Command & Event API ---
