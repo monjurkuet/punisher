@@ -206,6 +206,28 @@ class MongoStorage:
         result = await db.market_sentiment.insert_one(doc)
         return result.inserted_id
 
+    async def save_chat_message(self, session_id: str, role: str, content: str):
+        """Save a chat message to persistent history"""
+        db = await self.get_db()
+        doc = {
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow(),
+        }
+        await db.chat_sessions.insert_one(doc)
+
+    async def get_chat_history(self, session_id: str, limit: int = 20):
+        """Retrieve recent chat history for context"""
+        db = await self.get_db()
+        cursor = (
+            db.chat_sessions.find({"session_id": session_id})
+            .sort("timestamp", 1)  # Chronological order
+            .limit(limit)
+        )
+        history = await cursor.to_list(length=limit)
+        return [{"role": h["role"], "content": h["content"]} for h in history]
+
     async def get_latest_snapshots(self, wallet_address: str, limit: int = 10):
         """Get latest snapshots for a wallet"""
         db = await self.get_db()

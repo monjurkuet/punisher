@@ -99,59 +99,81 @@ class AgentOrchestrator:
             payload = json.loads(msg_raw)
             source = payload.get("source")
             content = payload.get("content", "").strip()
+            session_id = payload.get("session_id", "default")
 
-            logger.info(f"Command received from {source}: {content}")
+            logger.info(
+                f"Command received from {source} (session: {session_id}): {content}"
+            )
 
-            # Notify TUI/CLI that processing has started
-            if source == "tui" or source == "cli":
+            # 1. Save user input to persistence
+            await mongo.save_chat_message(session_id, "user", content)
+
+            # 2. Notify TUI/CLI/Web that processing has started
+            if source in ["tui", "cli", "web"]:
+                out_id = "cli" if source == "tui" else source
                 self.queue.push(
-                    f"punisher:{'cli' if source == 'tui' else source}:out",
+                    f"punisher:{out_id}:out",
                     "PUNISHER IS THINKING... [GATHERING INTEL]",
                 )
 
-            # 1. GATHER INTELLIGENCE (Parallelized)
+            # 3. GATHER INTELLIGENCE (Parallelized)
             intelligence_tasks = [
                 self.satoshi.get_alpha_context(),
                 self.joker.get_intel_context(),
                 self.get_macro_context(),
             ]
-
-            # Execute all intel gathering in parallel to avoid sequential LLM bottlenecks
             crypto_alpha, yt_intel, macro_str = await asyncio.gather(
                 *intelligence_tasks
             )
 
+            # 4. FETCH CONVERSATION HISTORY
+            history = await mongo.get_chat_history(session_id, limit=10)
+
             p_config = await self.get_agent_config("punisher")
 
-            # 2. VETERAN CONTEXT
-            context_str = (
+            # 5. VETERAN CONTEXT
+            intel_context = (
                 f"{crypto_alpha}\n\n--- MEDIA INTEL ---\n{yt_intel}\n{macro_str}"
             )
 
-            # 3. DELEGATION & TASK LOGGING
+            # 6. DELEGATION & TASK LOGGING (as requested)
             if any(k in content.lower() for k in ["scrape", "wallets", "discover"]):
                 sub_resp = await self.satoshi.process_task(content)
                 await self.log_task("satoshi", content)
-                context_str += f"\n[Satoshi Action]: {sub_resp}\n"
+                intel_context += f"\n[Satoshi Action]: {sub_resp}\n"
 
             if any(k in content.lower() for k in ["youtube", "video", "sync", "joker"]):
                 sub_resp = await self.joker.process_task(content)
                 await self.log_task("joker", content)
-                context_str += f"\n[Joker Action]: {sub_resp}\n"
+                intel_context += f"\n[Joker Action]: {sub_resp}\n"
 
-            # 4. SUPREME DECISION
-            logger.info("Engaging Supreme Intelligence...")
-            response_text = await self.llm.chat(
-                [
-                    {"role": "system", "content": p_config["system_prompt"]},
-                    {
-                        "role": "user",
-                        "content": f"INTEL REPORT:\n{context_str}\n\nCOMMAND:\n{content}",
-                    },
-                ]
-            )
+            # 7. SUPREME DECISION (With History Context)
+            logger.info(f"Engaging Supreme Intelligence for session {session_id}...")
 
-            # 5. BROADCAST
+            # Construct final prompt with intel context and history
+            # We filter history to ensure the current message isn't duplicated if it's already there
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"{p_config['system_prompt']}\n\nCURRENT INTEL:\n{intel_context}",
+                }
+            ]
+            # Add history (roles: user, assistant)
+            # Remove the very last one if it's exactly the same as current content (as we saved it in step 1)
+            # Actually, including it is fine as long as we don't append it again.
+            messages.extend(history)
+
+            # If the current message wasn't in history (e.g. history was too long or mongo was slightly delayed),
+            # we make sure the current request is at the end.
+            if not any(h["content"] == content for h in history[-2:]):
+                messages.append({"role": "user", "content": content})
+
+            response_text = await self.llm.chat(messages)
+
+            # 8. Save agent response
+            await mongo.save_chat_message(session_id, "assistant", response_text)
+
+            # 9. BROADCAST
             if source.startswith("telegram:"):
                 chat_id = source.split(":")[1]
                 self.queue.push(
@@ -159,7 +181,6 @@ class AgentOrchestrator:
                     json.dumps({"chat_id": int(chat_id), "content": response_text}),
                 )
             else:
-                # Map TUI to CLI output as they share the broadcast stream
                 out_id = "cli" if source == "tui" else source
                 target_out = f"punisher:{out_id}:out"
                 self.queue.push(target_out, response_text)
@@ -179,8 +200,9 @@ class AgentOrchestrator:
                         ),
                     )
                 else:
+                    out_id = "cli" if source == "tui" else source
                     self.queue.push(
-                        f"punisher:{source}:out", f"Operational Failure: {str(e)}"
+                        f"punisher:{out_id}:out", f"Operational Failure: {str(e)}"
                     )
 
     async def get_macro_context(self) -> str:

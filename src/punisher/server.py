@@ -97,10 +97,12 @@ async def get_tasks(agent: str = None):
 async def send_command(request: Request):
     data = await request.json()
     command = data.get("command")
+    session_id = data.get("session_id", "default")
+
     if not command:
         return {"error": "No command provided"}
 
-    payload = {"source": "web", "content": command}
+    payload = {"source": "web", "content": command, "session_id": session_id}
     queue.push("punisher:inbox", json.dumps(payload))
     return {"status": "sent"}
 
