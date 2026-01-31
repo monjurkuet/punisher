@@ -12,6 +12,7 @@ import base64
 import os
 import random
 import time
+import datetime
 from websockets import connect
 from punisher.bus.queue import MessageQueue
 from punisher.config import settings
@@ -39,13 +40,61 @@ class HyperliquidMonitor:
         self.queue = MessageQueue()
         self.running = False
 
-        # Wallet configuration
-        self.wallets = wallets or [settings.HYPERLIQUID_WALLET_ADDRESS]
+        # Static wallet list (if provided)
+        self.static_wallets = wallets or []
+
+        # Dynamic wallet tracking (from DB)
         self.current_wallet_index = 0
 
         # Connection state
         self.connection_count = 0
         self.last_activity = time.time()
+
+    async def get_all_target_wallets(self):
+        """Fetch both static and active dynamic wallets from DB"""
+        wallets = set(self.static_wallets)
+
+        # Fetch from DB: discovered or currently monitoring
+        try:
+            from punisher.db.mongo import mongo
+
+            db = await mongo.get_db()
+            cursor = db.tracked_wallets.find(
+                {
+                    "status": {
+                        "$in": ["discovered", "monitoring", "initial_scan_complete"]
+                    }
+                }
+            )
+            async for w in cursor:
+                wallets.add(w["address"])
+        except Exception as e:
+            logger.error(f"Failed to fetch wallets from DB: {e}")
+
+        # Fallback to config if nothing else exists
+        if not wallets and settings.HYPERLIQUID_WALLET_ADDRESS:
+            wallets.add(settings.HYPERLIQUID_WALLET_ADDRESS)
+
+        return list(wallets)
+
+    async def update_wallet_status(self, address: str, status: str):
+        """Update the scan/monitor status of a wallet in DB"""
+        try:
+            from punisher.db.mongo import mongo
+
+            db = await mongo.get_db()
+            await db.tracked_wallets.update_one(
+                {"address": address},
+                {
+                    "$set": {
+                        "status": status,
+                        "last_scan_at": datetime.datetime.now(datetime.UTC),
+                    }
+                },
+                upsert=True,  # In case it was a static wallet not in DB yet
+            )
+        except Exception as e:
+            logger.error(f"Failed to update wallet status: {e}")
 
     def create_ssl_context(self):
         """Create SSL context that mimics Chrome's TLS fingerprint"""
@@ -125,26 +174,24 @@ class HyperliquidMonitor:
             return None
         return self.wallets[self.current_wallet_index % len(self.wallets)]
 
-    def advance_to_next_wallet(self):
+    def advance_to_next_wallet(self, current_list_size: int):
         """Move to next wallet with human-like selection"""
-        if not self.wallets or len(self.wallets) <= 1:
-            return self.get_current_wallet()
+        if current_list_size <= 1:
+            return
 
         # Sometimes skip wallets or go back (human behavior)
         if random.random() < 0.1:  # 10% chance to skip
-            self.current_wallet_index = (self.current_wallet_index + 2) % len(
-                self.wallets
-            )
+            self.current_wallet_index = (
+                self.current_wallet_index + 2
+            ) % current_list_size
         elif random.random() < 0.05:  # 5% chance to go back
-            self.current_wallet_index = (self.current_wallet_index - 1) % len(
-                self.wallets
-            )
+            self.current_wallet_index = (
+                self.current_wallet_index - 1
+            ) % current_list_size
         else:
-            self.current_wallet_index = (self.current_wallet_index + 1) % len(
-                self.wallets
-            )
-
-        return self.get_current_wallet()
+            self.current_wallet_index = (
+                self.current_wallet_index + 1
+            ) % current_list_size
 
     async def connect_with_stealth(self):
         """Establish connection with maximum stealth"""
@@ -196,16 +243,18 @@ class HyperliquidMonitor:
     async def start(self):
         """Main monitoring loop"""
         self.running = True
-        logger.info(
-            f"Starting Hyperliquid Stealth Monitor for {len(self.wallets)} wallet(s)"
-        )
+        logger.info("Starting Hyperliquid Stealth Monitor (Dynamic Mode)")
 
         while self.running:
-            current_wallet = self.get_current_wallet()
-            if not current_wallet:
-                logger.error("No wallets configured!")
-                await asyncio.sleep(60)
+            # Refresh wallet list on each loop iteration
+            wallets = await self.get_all_target_wallets()
+            if not wallets:
+                logger.warning("No wallets to process yet...")
+                await asyncio.sleep(10)
                 continue
+
+            # Get wallet to process
+            current_wallet = wallets[self.current_wallet_index % len(wallets)]
 
             try:
                 ws = await self.connect_with_stealth()
@@ -240,7 +289,7 @@ class HyperliquidMonitor:
                 await ws.close()
 
                 # Move to next wallet
-                self.advance_to_next_wallet()
+                self.advance_to_next_wallet(len(wallets))
 
             except Exception as e:
                 logger.error(f"Hyperliquid WS Error: {e}")
@@ -258,6 +307,10 @@ class HyperliquidMonitor:
 
                 await mongo.save_wallet_snapshot(wallet_address, parsed)
                 logger.debug(f"Saved snapshot to MongoDB for {wallet_address[:8]}...")
+
+                # Update status to mark initial scan success
+                await self.update_wallet_status(wallet_address, "initial_scan_complete")
+
             except Exception as db_err:
                 logger.warning(f"MongoDB save failed: {db_err}")
 
